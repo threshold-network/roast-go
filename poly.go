@@ -50,9 +50,6 @@ func CalculatePoly(coeffs []*big.Int, x int) *big.Int {
    polynomial interpolation.  It is provided a list of x-coordinates as
    input, each of which cannot equal 0.
 
-Connolly, et al.          Expires 22 March 2024                [Page 12]
-Internet-Draft                    FROST                   September 2023
-
    Inputs:
    - L, the list of x-coordinates, each a NonZeroScalar.
    - x_i, an x-coordinate contained in L, a NonZeroScalar.
@@ -65,25 +62,37 @@ Internet-Draft                    FROST                   September 2023
      x-coordinate is represented more than once in L.
 */
 // def derive_interpolating_value(L, x_i):
-func deriveInterpolatingValue(xi uint64, L []uint64) (*big.Int, *big.Int) {
-	// FIXME: add checking as per 4.2
+func deriveInterpolatingValue(xi uint64, L []uint64) *big.Int {
 	found := false
+	// numerator = Scalar(1)
 	num := big.NewInt(1)
+	// denominator = Scalar(1)
 	den := big.NewInt(1)
+	// for x_j in L:
 	for _, xj := range L {
 		if (xj == xi) {
+			// for x_j in L:
+			//     if count(x_j, L) > 1:
+			//         raise "invalid parameters"
 			if found {
 				panic("invalid parameters")
 			}
 			found = true
+			// if x_j == x_i: continue
 			continue
 		}
+		// numerator *= x_j
 		num.Mul(num, big.NewInt(int64(xj)))
+		// denominator *= x_j - x_i
 		den.Mul(den, big.NewInt(int64(xj) - int64(xi)))
 	}
 
+	// if x_i not in L:
+	//     raise "invalid parameters"
 	if !found {
 		panic("invalid parameters")
 	}
-	return num, den
+	// value = numerator / denominator
+	// return value
+	return new(big.Int).Div(num, den)
 }

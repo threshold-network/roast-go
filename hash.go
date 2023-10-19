@@ -79,6 +79,11 @@ func I2OSP(x *big.Int, xLen uint64) []byte {
 	return x.FillBytes(buf)
 }
 
+func HashToInt(msg []byte) *big.Int {
+	h := sha256.Sum256(msg)
+	return FromBytes32(h)
+}
+
 // Safe concatenation of byte slices:
 // Using append(a, b...) can modify a by extending its length
 // if it has sufficient capacity to hold b.
