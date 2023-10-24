@@ -217,6 +217,7 @@ func SendSignRequests(
 func (R *RoastExecution) RunCoordinator(
 	inCh CoordinatorCh,
 	outChs []MemberCh,
+	maxDelay int64,
 ) BIP340Signature {
 	fmt.Printf("coordinator %v requesting commits\n", R.coordinatorIndex)
 	crptr := R.RequestCommits()
@@ -232,14 +233,14 @@ func (R *RoastExecution) RunCoordinator(
 	for {
 		select {
 		case commit := <- inCh.com:
-			RandomDelay(500)
+			RandomDelay(maxDelay)
 			fmt.Printf("coordinator %v received commit from member %v\n", R.coordinatorIndex, commit.i)
 			sr := R.ReceiveCommit(commit)
 			if sr != nil {
 				SendSignRequests(outChs, *sr)
 			}
 		case share := <- inCh.shr:
-			RandomDelay(500)
+			RandomDelay(maxDelay)
 			fmt.Printf("coordinator %v received share from member %v\n", R.coordinatorIndex, share.commit.i)
 			sig := R.ReceiveShare(share.commit.i, share.commitHash, share.share)
 			if sig != nil {

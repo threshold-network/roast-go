@@ -76,6 +76,22 @@ func main() {
 		RespondsMaliciously,
 		RespondsMaliciously,
 		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
+		RespondsMaliciously,
 	})
 }
 
@@ -144,13 +160,17 @@ func RunRoastCh(n, t int, corruption []int) {
 	for j := range members {
 		go func(member MemberState, ch MemberCh) {
 			defer wg.Done()
-			member.RunMember(coordinatorCh, ch)
+			delayLimit, err := rand.Int(rand.Reader, big.NewInt(2000))
+			if err != nil {
+				panic(err)
+			}
+			member.RunMember(coordinatorCh, ch, delayLimit.Int64())
 		}(members[j], memberChs[j])
 	}
 	
 	go func() {
 		defer wg.Done()
-		r1.RunCoordinator(coordinatorCh, memberChs)
+		r1.RunCoordinator(coordinatorCh, memberChs, 100)
 	}()
 
 	wg.Wait()
