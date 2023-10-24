@@ -232,14 +232,14 @@ func (R *RoastExecution) RunCoordinator(
 	for {
 		select {
 		case commit := <- inCh.com:
-			RandomDelay(100)
+			RandomDelay(500)
 			fmt.Printf("coordinator %v received commit from member %v\n", R.coordinatorIndex, commit.i)
 			sr := R.ReceiveCommit(commit)
 			if sr != nil {
 				SendSignRequests(outChs, *sr)
 			}
 		case share := <- inCh.shr:
-			RandomDelay(100)
+			RandomDelay(500)
 			fmt.Printf("coordinator %v received share from member %v\n", R.coordinatorIndex, share.commit.i)
 			sig := R.ReceiveShare(share.commit.i, share.commitHash, share.share)
 			if sig != nil {
