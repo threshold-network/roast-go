@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"sync"
 )
 
 type Member struct {
@@ -50,6 +51,8 @@ func main() {
 	valid := BIP340Verify(ToBIP340(sig), ToBytes32(pk.X), msg)
 
 	fmt.Println(valid)
+
+	RunRoastCh(n, t, []int{GoodMember, DoesNotCommit, DoesNotRespond, RespondsMaliciously})
 }
 
 func RunKeygen(n, t int) ([]Member, Point) {
@@ -88,4 +91,92 @@ func GenSharedKey() (*big.Int, Point) {
 	}
 
 	return sk, pk
+}
+
+func RunRoastCh(n, t int, corruption []int) {
+	group, members := Initialise(n, t)
+	CorruptMembers(members, corruption)
+
+	memberChs := make([]MemberCh, n)
+	for j, member := range members {
+		fmt.Printf("preparing member channel %v\n", member.i)
+		memberChs[j] = MemberCh {
+			member.i,
+			make(chan CommitRequest, 10),
+			make(chan SignRequest, 10),
+			make(chan bool, 1),
+		}
+	}
+	coordinatorCh := CoordinatorCh {
+		make(chan Commit, n*2),
+		make(chan SignatureShare, n*2),
+	}
+
+	r1 := group.NewCoordinator([]byte("test"), 1)
+
+	var wg sync.WaitGroup
+	wg.Add(len(members) + 1)
+
+	for j := range members {
+		go func(member MemberState, ch MemberCh) {
+			defer wg.Done()
+			member.RunMember(coordinatorCh, ch)
+		}(members[j], memberChs[j])
+	}
+	
+	go func() {
+		defer wg.Done()
+		r1.RunCoordinator(coordinatorCh, memberChs)
+	}()
+
+	wg.Wait()
+}
+
+func RunRoast(n, t int) {
+	group, members := Initialise(n, t)
+	
+	members[1].behaviour = DoesNotCommit
+
+	r1 := group.NewCoordinator([]byte("test"), 1)
+
+	commitRequest := r1.RequestCommits()
+
+	commits := make([]Commit, 0)
+
+	for _, member := range members {
+		fmt.Printf("requesting commit from member %v\n", member.i)
+		commit := member.RespondC(*commitRequest)
+		if commit != nil {
+			commits = append(commits, *commit)
+		}
+	}
+
+	var signRequest *SignRequest
+	for _, commit := range commits {
+		fmt.Printf("processing commit from member %v\n", commit.i)
+		sr := r1.ReceiveCommit(commit)
+		if sr != nil {
+			signRequest = sr
+			break
+		}
+	}
+
+	shares := make([]SignatureShare, 0)
+	for _, commit := range signRequest.commits {
+		member := members[commit.i - 1]
+		fmt.Printf("requesting signature from member %v\n", commit.i)
+		share := member.RespondS(*signRequest)
+		if share != nil {
+			shares = append(shares, *share)
+			commits = append(commits, share.commit)
+		}
+	}
+
+	for _, share := range shares {
+		fmt.Printf("processing share %v\n", share.commit.i)
+		sig := r1.ReceiveShare(share.commit.i, share.commitHash, share.share)
+		if sig != nil {
+			fmt.Println("successful signature\n")
+		}
+	}
 }

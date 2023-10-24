@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
 )
 
@@ -29,7 +30,7 @@ type MemberState struct {
 	pk Point
 	pki Point
 	ski *big.Int
-	// coordinator index -> response to that coordinator
+	// hash(coordinator index, commitHash) -> response to that coordinator
 	responses map[[32]byte]*MemberResponse
 }
 
@@ -50,9 +51,9 @@ func (S *MemberState) RespondC(r CommitRequest) *Commit {
 
 	res := MemberResponse{ c, n, false }
 
-	ch := CommitHash(c)
+	rh := ResponseHash(c, r.coordinator)
 
-	S.responses[ch] = &res
+	S.responses[rh] = &res
 
 	return &c
 }
@@ -78,8 +79,8 @@ func (S *MemberState) RespondS(r SignRequest) *SignatureShare {
 
 	for _, c := range r.commits {
 		if c.i == S.i {
-			ch := CommitHash(c)
-			found = S.responses[ch]
+			rh := ResponseHash(c, r.coordinator)
+			found = S.responses[rh]
 		}
 	}
 
@@ -94,9 +95,9 @@ func (S *MemberState) RespondS(r SignRequest) *SignatureShare {
 
 	newres := MemberResponse{ cc, nn, false }
 
-	chh := CommitHash(cc)
+	rhh := ResponseHash(cc, r.coordinator)
 
-	S.responses[chh] = &newres
+	S.responses[rhh] = &newres
 
 	//
 	// Bad behaviour
@@ -123,4 +124,31 @@ func (S *MemberState) RespondS(r SignRequest) *SignatureShare {
 	found.spent = true
 
 	return &SignatureShare{requestId, share, cc}
+}
+
+func (S *MemberState) RunMember(
+	outCh CoordinatorCh,
+	inCh MemberCh,
+) {
+	for {
+		select {
+		case cr := <- inCh.cr:
+			fmt.Printf("member %v responding to commit request\n", S.i)
+			commit := S.RespondC(cr)
+			if commit != nil {
+				outCh.com <- *commit
+			}
+		case sr := <- inCh.sr :
+			fmt.Printf("member %v responding to sign request\n", S.i)
+			share := S.RespondS(sr)
+			if share != nil {
+				s := *share
+				outCh.shr <- s
+				outCh.com <- s.commit
+			}
+		case <-inCh.done:
+			fmt.Printf("member %v done\n", S.i)
+			return
+		}
+	}
 }

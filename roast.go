@@ -30,6 +30,18 @@ type SignatureShare struct {
 	commit Commit
 }
 
+type CoordinatorCh struct {
+	com chan Commit
+	shr chan SignatureShare
+}
+
+type MemberCh struct {
+	i uint64
+	cr chan CommitRequest
+	sr chan SignRequest
+	done chan bool
+}
+
 func Initialise(n, t int) (*GroupData, []MemberState) {
 	memberIds := make([]uint64, n)
 	memberStates := make([]MemberState, n)
@@ -117,4 +129,11 @@ func CommitListHash(cs []Commit) [32]byte {
 
 	tag := []byte("roast/commit_list_hash")
 	return BIP340Hash(tag, bs)
+}
+
+func ResponseHash(c Commit, coordinator uint64) [32]byte {
+	tag := []byte("roast/response_hash")
+	ib := I2OSP(big.NewInt(int64(c.i)), 8) // FIXME: jank but will do for now
+	cb := I2OSP(big.NewInt(int64(coordinator)), 8) // jank
+	return BIP340Hash(tag, concat(ib, c.hnc.Bytes(), c.bnc.Bytes(), cb))
 }

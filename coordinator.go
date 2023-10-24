@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
 )
 
@@ -48,10 +49,24 @@ func (R *RoastExecution) RequestCommits() *CommitRequest {
 	return &CommitRequest{R.coordinatorIndex, R.message}
 }
 
+func (R *RoastExecution) HasBad(i uint64) bool {
+	for _, bad := range R.badMembers {
+		if i == bad {
+			return true
+		}
+	}
+	return false
+}
+
 
 // Coordinator behaviour:
 // Receive a response from a member
 func (R *RoastExecution) ReceiveCommit(commit Commit) *SignRequest {
+	// filter out bad members' commits so we reject them in the future
+	if R.HasBad(commit.i) {
+		return nil
+	}
+
 	R.commits = InsertCommit(R.commits, commit)
 
 	if len(R.commits) != R.group.T {
@@ -180,5 +195,56 @@ func (R *RoastExecution) ReceiveShare(memberId uint64, requestId [32]byte, share
 		return &bipSig
 	} else {
 		return nil
+	}
+}
+
+func SendSignRequests(
+	outChs []MemberCh,
+	sr SignRequest,
+) {
+	participants := participantsFromCommitList(sr.commits)
+	for _, p := range participants {
+		for _, out := range outChs {
+			if out.i == p {
+				out.sr <- sr
+			}
+		}
+	}
+}
+
+func (R *RoastExecution) RunCoordinator(
+	inCh CoordinatorCh,
+	outChs []MemberCh,
+) BIP340Signature {
+	fmt.Printf("coordinator %v requesting commits\n", R.coordinatorIndex)
+	crptr := R.RequestCommits()
+	cr := *crptr
+	for _, out := range outChs {
+		if !R.HasBad(out.i) {
+			fmt.Printf("sending request to member %v\n", out.i)
+			request := cr
+			out.cr <- request
+		}
+	}
+
+	for {
+		select {
+		case commit := <- inCh.com:
+			fmt.Printf("coordinator %v received commit from member %v\n", R.coordinatorIndex, commit.i)
+			sr := R.ReceiveCommit(commit)
+			if sr != nil {
+				SendSignRequests(outChs, *sr)
+			}
+		case share := <- inCh.shr:
+			fmt.Printf("coordinator %v received share from member %v\n", R.coordinatorIndex, share.commit.i)
+			sig := R.ReceiveShare(share.commit.i, share.commitHash, share.share)
+			if sig != nil {
+				fmt.Println("successful signature")
+				for _, out := range outChs {
+					out.done <- true
+				}
+				return *sig
+			}
+		}
 	}
 }

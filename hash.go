@@ -39,16 +39,16 @@ func H(m []byte) []byte {
 
 func H1(m []byte) *big.Int {
 	DST := concat(contextString, []byte("rho"))
-	return hashToField(m, DST)
+	return hashToScalar(DST, m)
 }
 
 func H2(m []byte) *big.Int {
-	return hashToField(bip340ChallengeTag, m)
+	return hashToScalar(bip340ChallengeTag, m)
 }
 
 func H3(m []byte) *big.Int {
 	DST := concat(contextString, []byte("nonce"))
-	return hashToField(m, DST)
+	return hashToScalar(DST, m)
 }
 
 func H4(m []byte) []byte {
@@ -61,7 +61,7 @@ func H5(m []byte) []byte {
 	return hashed[:]
 }
 
-func hashToField(tag, msg []byte) *big.Int {
+func hashToScalar(tag, msg []byte) *big.Int {
 	hashed := BIP340Hash(tag, msg)
 
 	ej := OS2IP(hashed[:])

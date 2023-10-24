@@ -271,7 +271,9 @@ func computeChallenge(gc Point, pk Point, msg []byte) *big.Int {
 	// group_public_key_enc = G.SerializeElement(group_public_key)
 	// challenge_input = group_comm_enc || group_public_key_enc || msg
 	// challenge = H2(challenge_input)
-	challenge := BIP340HashChallenge(gc.X.Bytes(), pk.X.Bytes(), msg)
+	gcb := gc.ToBytes32()
+	pkb := pk.ToBytes32()
+	challenge := BIP340HashChallenge(gcb[:], pkb[:], msg)
 	// return challenge
 	return FromBytes32(challenge)
 }
