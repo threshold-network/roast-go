@@ -2,6 +2,8 @@ package main
 
 import (
 	"math/big"
+	"math/rand"
+	"time"
 )
 
 
@@ -136,4 +138,8 @@ func ResponseHash(c Commit, coordinator uint64) [32]byte {
 	ib := I2OSP(big.NewInt(int64(c.i)), 8) // FIXME: jank but will do for now
 	cb := I2OSP(big.NewInt(int64(coordinator)), 8) // jank
 	return BIP340Hash(tag, concat(ib, c.hnc.Bytes(), c.bnc.Bytes(), cb))
+}
+
+func RandomDelay(limit int64) {
+	time.Sleep(time.Duration(rand.Int63n(limit)) * time.Millisecond)
 }

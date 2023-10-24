@@ -14,8 +14,8 @@ type Member struct {
 }
 
 func main() {
-	n := 9
-	t := 5
+	n := 100
+	t := 51
 
 	members, pk := RunKeygen(n, t)
 

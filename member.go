@@ -133,12 +133,14 @@ func (S *MemberState) RunMember(
 	for {
 		select {
 		case cr := <- inCh.cr:
+			RandomDelay(200)
 			fmt.Printf("member %v responding to commit request\n", S.i)
 			commit := S.RespondC(cr)
 			if commit != nil {
 				outCh.com <- *commit
 			}
 		case sr := <- inCh.sr :
+			RandomDelay(200)
 			fmt.Printf("member %v responding to sign request\n", S.i)
 			share := S.RespondS(sr)
 			if share != nil {
