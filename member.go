@@ -144,7 +144,6 @@ func (S *MemberState) RunMember(
 			if share != nil {
 				s := *share
 				outCh.shr <- s
-				outCh.com <- s.commit
 			}
 		case <-inCh.done:
 			fmt.Printf("member %v done\n", S.i)

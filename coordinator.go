@@ -204,6 +204,7 @@ func SendSignRequests(
 	sr SignRequest,
 ) {
 	participants := participantsFromCommitList(sr.commits)
+	fmt.Printf("requesting signatures from %v\n", participants)
 	for _, p := range participants {
 		for _, out := range outChs {
 			if out.i == p {
@@ -245,6 +246,11 @@ func (R *RoastExecution) RunCoordinator(
 					out.done <- true
 				}
 				return *sig
+			} else {
+				sr := R.ReceiveCommit(share.commit)
+				if sr != nil {
+					SendSignRequests(outChs, *sr)
+				}
 			}
 		}
 	}

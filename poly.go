@@ -83,8 +83,10 @@ func deriveInterpolatingValue(xi uint64, L []uint64) *big.Int {
 		}
 		// numerator *= x_j
 		num.Mul(num, big.NewInt(int64(xj)))
+		num.Mod(num, G.N)
 		// denominator *= x_j - x_i
 		den.Mul(den, big.NewInt(int64(xj) - int64(xi)))
+		den.Mod(den, G.N)
 	}
 
 	// if x_i not in L:
@@ -94,5 +96,10 @@ func deriveInterpolatingValue(xi uint64, L []uint64) *big.Int {
 	}
 	// value = numerator / denominator
 	// return value
-	return new(big.Int).Div(num, den)
+
+	denInv := new(big.Int).ModInverse(den, G.N)
+	res := new(big.Int).Mul(num, denInv)
+	res = res.Mod(res, G.N)
+
+	return res
 }

@@ -52,7 +52,13 @@ func main() {
 
 	fmt.Println(valid)
 
-	RunRoastCh(n, t, []int{GoodMember, DoesNotCommit, DoesNotRespond, RespondsMaliciously})
+	RunRoastCh(n, t, []int{
+		GoodMember,
+		DoesNotCommit,
+		DoesNotRespond,
+		RespondsMaliciously,
+		RespondsMaliciously,
+	})
 }
 
 func RunKeygen(n, t int) ([]Member, Point) {
