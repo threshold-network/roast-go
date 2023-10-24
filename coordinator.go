@@ -168,6 +168,7 @@ func (R *RoastExecution) ReceiveShare(memberId uint64, requestId [32]byte, share
 		R.message,
 	)
 	if !shareGood {
+		fmt.Printf("---- bad share; recording misbehaving member %v ----\n", memberId)
 		R.badMembers = append(R.badMembers, memberId)
 		return nil
 	}
