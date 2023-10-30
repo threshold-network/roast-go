@@ -2,7 +2,7 @@ package main
 
 import (
 	"crypto/rand"
-	"fmt"
+	// "fmt"
 	"math/big"
 )
 
@@ -16,6 +16,13 @@ const (
 	DoesNotRespond = iota
 	// this member will send invalid signature shares
 	RespondsMaliciously = iota
+	// This member will send invalid signature shares,
+	// but only if it is the lowest-indexed member in the group.
+	// Use this to simulate coordinated malicious behaviour.
+	WithMaliceAforethought = iota
+	// Like above, but it refrains from responding
+	// instead of responding with invalid shares.
+	MaliciouslyInactive = iota
 )
 
 type MemberResponse struct {
@@ -77,6 +84,15 @@ func (S *MemberState) RespondS(r SignRequest) *SignatureShare {
 
 	requestId := CommitListHash(r.commits)
 
+	firstCommit := r.commits[0]
+	if firstCommit.i == S.i {
+		if b == WithMaliceAforethought {
+			b = RespondsMaliciously
+		} else if b == MaliciouslyInactive {
+			return nil
+		}
+	}
+
 	for _, c := range r.commits {
 		if c.i == S.i {
 			rh := ResponseHash(c, r.coordinator)
@@ -129,27 +145,24 @@ func (S *MemberState) RespondS(r SignRequest) *SignatureShare {
 func (S *MemberState) RunMember(
 	outCh CoordinatorCh,
 	inCh MemberCh,
-	maxDelay int64,
 ) {
 	for {
 		select {
 		case cr := <- inCh.cr:
-			RandomDelay(maxDelay)
-			fmt.Printf("member %v responding to commit request\n", S.i)
+			// fmt.Printf("member %v responding to commit request\n", S.i)
 			commit := S.RespondC(cr)
 			if commit != nil {
 				outCh.com <- *commit
 			}
 		case sr := <- inCh.sr :
-			RandomDelay(maxDelay)
-			fmt.Printf("member %v responding to sign request\n", S.i)
+			// fmt.Printf("member %v responding to sign request\n", S.i)
 			share := S.RespondS(sr)
 			if share != nil {
 				s := *share
 				outCh.shr <- s
 			}
 		case <-inCh.done:
-			fmt.Printf("member %v done\n", S.i)
+			// fmt.Printf("member %v done\n", S.i)
 			return
 		}
 	}

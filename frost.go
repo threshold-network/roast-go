@@ -40,6 +40,11 @@ type Signature struct {
 	z *big.Int
 }
 
+type SigVerifyPrecalc struct {
+	bfs []BindingFactor
+	challenge *big.Int
+}
+
 func toBytes(x uint64) []byte {
 	b := make([]byte, 8)
 	return big.NewInt(int64(x)).FillBytes(b)
@@ -537,6 +542,39 @@ func verifySignatureShare(
 	r := EcAdd(cShare, EcMul(pk_i, cli))
 
 	// return l == r
+	return PointsEq(l, r)
+}
+
+// Same as above, but use cached binding factors and challenge,
+// only calculating them on the first call on the attempt.
+// This constitutes a major saving in coordinator overhead,
+// especially with large group sizes.
+func verifySignatureSharePrecalc(
+	i uint64,
+	pk_i Point,
+	commit_i Commit,
+	sigShare_i *big.Int,
+	cs []Commit,
+	pk Point,
+	msg []byte,
+	precalc *SigVerifyPrecalc,
+) bool {
+	if precalc.challenge == nil {
+		// fmt.Println("calculating shared values for signature share verification")
+		bfs := computeBindingFactors(pk, cs, msg)
+		gc := computeGroupCommitment(cs, bfs)
+		challenge := computeChallenge(gc, pk, msg)
+
+		precalc.bfs = bfs
+		precalc.challenge = challenge
+	}
+	bf := bindingFactorForParticipant(precalc.bfs, i)
+	cShare := EcAdd(commit_i.hnc, EcMul(commit_i.bnc, bf))
+	members := participantsFromCommitList(cs)
+	lambda_i := deriveInterpolatingValue(i, members)
+	cli := new(big.Int).Mul(precalc.challenge, lambda_i)
+	l := EcBaseMul(sigShare_i)
+	r := EcAdd(cShare, EcMul(pk_i, cli))
 	return PointsEq(l, r)
 }
 

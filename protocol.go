@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 )
 
 type Member struct {
@@ -14,12 +15,14 @@ type Member struct {
 }
 
 func main() {
-	n := 100
-	t := 51
+	n := 400
+	t := 201
 
-	members, pk := RunKeygen(n, t)
+	// members, pk := RunKeygen(n, t)
 
-	msg := []byte("message")
+	// msg := []byte("message")
+
+	/*
 
 	// round 1
 	participants := members[0:t]
@@ -51,48 +54,28 @@ func main() {
 	valid := BIP340Verify(ToBIP340(sig), ToBytes32(pk.X), msg)
 
 	fmt.Println(valid)
+*/
 
-	RunRoastCh(n, t, []int{
-		GoodMember,
-		DoesNotCommit,
-		DoesNotCommit,
-		DoesNotRespond,
-		DoesNotRespond,
-		DoesNotRespond,
-		DoesNotRespond,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-		RespondsMaliciously,
-	})
+	coordinatedInvalidShares := make([]int, n - t)
+	for i := range coordinatedInvalidShares {
+		coordinatedInvalidShares[i] = WithMaliceAforethought
+	}
+	coordinatedInactivity := make([]int, n - t)
+	for i := range coordinatedInactivity {
+		coordinatedInactivity[i] = MaliciouslyInactive
+	}
+
+	start := time.Now()
+	RunRoastCh(n, t, coordinatedInvalidShares)
+	end := time.Now()
+	duration := end.Sub(start)
+	fmt.Printf("coordinated invalid shares: %v\n\n", duration)
+
+	start = time.Now()
+	RunRoastCh(n, t, coordinatedInactivity)
+	end = time.Now()
+	duration = end.Sub(start)
+	fmt.Printf("coordinated inactivity: %v\n\n", duration)
 }
 
 func RunKeygen(n, t int) ([]Member, Point) {
@@ -137,10 +120,10 @@ func RunRoastCh(n, t int, corruption []int) {
 	group, members := Initialise(n, t)
 	CorruptMembers(members, corruption)
 
-	memberChs := make([]MemberCh, n)
-	for j, member := range members {
-		fmt.Printf("preparing member channel %v\n", member.i)
-		memberChs[j] = MemberCh {
+	memberChs := make(map[uint64]MemberCh)
+	for _, member := range members {
+		// fmt.Printf("preparing member channel %v\n", member.i)
+		memberChs[member.i] = MemberCh {
 			member.i,
 			make(chan CommitRequest, 10),
 			make(chan SignRequest, 10),
@@ -157,20 +140,16 @@ func RunRoastCh(n, t int, corruption []int) {
 	var wg sync.WaitGroup
 	wg.Add(len(members) + 1)
 
-	for j := range members {
+	for _, member := range members {
 		go func(member MemberState, ch MemberCh) {
 			defer wg.Done()
-			delayLimit, err := rand.Int(rand.Reader, big.NewInt(2000))
-			if err != nil {
-				panic(err)
-			}
-			member.RunMember(coordinatorCh, ch, delayLimit.Int64())
-		}(members[j], memberChs[j])
+			member.RunMember(coordinatorCh, ch)
+		}(member, memberChs[member.i])
 	}
 	
 	go func() {
 		defer wg.Done()
-		r1.RunCoordinator(coordinatorCh, memberChs, 100)
+		r1.RunCoordinator(coordinatorCh, memberChs)
 	}()
 
 	wg.Wait()

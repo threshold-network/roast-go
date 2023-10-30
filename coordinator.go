@@ -33,6 +33,7 @@ type RoastRequest struct {
 	identifier [32]byte
 	Commitments []Commit
 	Responses map[uint64]*big.Int
+	Precalc *SigVerifyPrecalc
 }
 
 func (R *RoastExecution) RequestCommits() *CommitRequest {
@@ -98,6 +99,7 @@ func (R *RoastExecution) ReceiveCommit(commit Commit) *SignRequest {
 		csHash,
 		cs,
 		make(map[uint64]*big.Int),
+		&SigVerifyPrecalc{[]BindingFactor{}, nil},
 	}
 	R.commits = make([]Commit, 0)
 
@@ -158,7 +160,7 @@ func (R *RoastExecution) ReceiveShare(memberId uint64, requestId [32]byte, share
 	if !found {
 		return nil
 	}
-	shareGood := verifySignatureShare(
+	shareGood := verifySignatureSharePrecalc(
 		memberId,
 		R.group.PubkeyShares[memberId],
 		commit,
@@ -166,9 +168,10 @@ func (R *RoastExecution) ReceiveShare(memberId uint64, requestId [32]byte, share
 		cs,
 		R.group.Pubkey,
 		R.message,
+		req.Precalc,
 	)
 	if !shareGood {
-		fmt.Printf("---- bad share; recording misbehaving member %v ----\n", memberId)
+		fmt.Printf("#")
 		R.badMembers = append(R.badMembers, memberId)
 		return nil
 	}
@@ -200,31 +203,26 @@ func (R *RoastExecution) ReceiveShare(memberId uint64, requestId [32]byte, share
 }
 
 func SendSignRequests(
-	outChs []MemberCh,
+	outChs map[uint64]MemberCh,
 	sr SignRequest,
 ) {
 	participants := participantsFromCommitList(sr.commits)
-	fmt.Printf("requesting signatures from %v\n", participants)
+	// fmt.Printf("requesting signatures from %v\n", participants)
 	for _, p := range participants {
-		for _, out := range outChs {
-			if out.i == p {
-				out.sr <- sr
-			}
-		}
+		outChs[p].sr <- sr
 	}
 }
 
 func (R *RoastExecution) RunCoordinator(
 	inCh CoordinatorCh,
-	outChs []MemberCh,
-	maxDelay int64,
+	outChs map[uint64]MemberCh,
 ) BIP340Signature {
 	fmt.Printf("coordinator %v requesting commits\n", R.coordinatorIndex)
 	crptr := R.RequestCommits()
 	cr := *crptr
-	for _, out := range outChs {
-		if !R.HasBad(out.i) {
-			fmt.Printf("sending request to member %v\n", out.i)
+	for i, out := range outChs {
+		if !R.HasBad(i) {
+			// fmt.Printf("sending request to member %v\n", out.i)
 			request := cr
 			out.cr <- request
 		}
@@ -233,15 +231,13 @@ func (R *RoastExecution) RunCoordinator(
 	for {
 		select {
 		case commit := <- inCh.com:
-			RandomDelay(maxDelay)
-			fmt.Printf("coordinator %v received commit from member %v\n", R.coordinatorIndex, commit.i)
+			// fmt.Printf("coordinator %v received commit from member %v\n", R.coordinatorIndex, commit.i)
 			sr := R.ReceiveCommit(commit)
 			if sr != nil {
 				SendSignRequests(outChs, *sr)
 			}
 		case share := <- inCh.shr:
-			RandomDelay(maxDelay)
-			fmt.Printf("coordinator %v received share from member %v\n", R.coordinatorIndex, share.commit.i)
+			// fmt.Printf("coordinator %v received share from member %v\n", R.coordinatorIndex, share.commit.i)
 			sig := R.ReceiveShare(share.commit.i, share.commitHash, share.share)
 			if sig != nil {
 				fmt.Println("successful signature")
