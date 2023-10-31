@@ -73,7 +73,9 @@ func toBytes(x uint64) []byte {
 // def encode_group_commitment_list(commitment_list):
 func encodeGroupCommitment(cs []Commit) []byte {
 	// encoded_group_commitment = nil
-	b := make([]byte, 0)
+
+	// preallocate the necessary space to avoid waste
+	b := make([]byte, 0, 136 * len(cs))
 	// for (identifier, hiding_nonce_commitment,
 	//      binding_nonce_commitment) in commitment_list:
 	for _, ci := range cs {
@@ -84,7 +86,15 @@ func encodeGroupCommitment(cs []Commit) []byte {
 		// encoded_group_commitment = (
 		//     encoded_group_commitment ||
 		//     encoded_commitment)
-		b = concat(b, toBytes(ci.i), ci.hnc.Bytes(), ci.bnc.Bytes())
+
+		// length of commitment encoding:
+		// 8 bytes (uint64)
+		// 64 bytes (Point)
+		// 64 bytes (Point)
+		// = 136 bytes
+		b = append(b, toBytes(ci.i)...)
+		b = append(b, ci.hnc.Bytes()...)
+		b = append(b, ci.bnc.Bytes()...)
 	}
 	// return encoded_group_commitment
 	return b
@@ -559,8 +569,8 @@ func verifySignatureSharePrecalc(
 	msg []byte,
 	precalc *SigVerifyPrecalc,
 ) bool {
+	// Use the challenge's *big.Int pointer to see whether values have been cached.
 	if precalc.challenge == nil {
-		// fmt.Println("calculating shared values for signature share verification")
 		bfs := computeBindingFactors(pk, cs, msg)
 		gc := computeGroupCommitment(cs, bfs)
 		challenge := computeChallenge(gc, pk, msg)

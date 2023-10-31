@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"os"
+	"runtime/pprof"
 	"sync"
 	"time"
 )
@@ -15,6 +17,12 @@ type Member struct {
 }
 
 func main() {
+	f, err := os.Create("roast.prof")
+	if err != nil {
+		panic(err)
+	}
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 	n := 400
 	t := 201
 
@@ -71,11 +79,13 @@ func main() {
 	duration := end.Sub(start)
 	fmt.Printf("coordinated invalid shares: %v\n\n", duration)
 
+	/*
 	start = time.Now()
 	RunRoastCh(n, t, coordinatedInactivity)
 	end = time.Now()
 	duration = end.Sub(start)
 	fmt.Printf("coordinated inactivity: %v\n\n", duration)
+	*/
 }
 
 func RunKeygen(n, t int) ([]Member, Point) {
@@ -199,7 +209,7 @@ func RunRoast(n, t int) {
 		fmt.Printf("processing share %v\n", share.commit.i)
 		sig := r1.ReceiveShare(share.commit.i, share.commitHash, share.share)
 		if sig != nil {
-			fmt.Println("successful signature\n")
+			fmt.Printf("successful signature\n")
 		}
 	}
 }

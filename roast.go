@@ -124,11 +124,11 @@ func CommitHash(c Commit) [32]byte {
 }
 
 func CommitListHash(cs []Commit) [32]byte {
-	bs := make([]byte, 0)
+	bs := make([]byte, 0, 32 * len(cs))
 
 	for _, c := range cs {
 		h := CommitHash(c)
-		bs = concat(bs, h[:])
+		bs = append(bs, h[:]...)
 	}
 
 	tag := []byte("roast/commit_list_hash")

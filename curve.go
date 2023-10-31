@@ -26,11 +26,10 @@ func (P Point) ToBytes32() [32]byte {
 }
 
 func (P Point) Bytes() []byte {
-	xb := make([]byte, 32)
-	P.X.FillBytes(xb)
-	yb := make([]byte, 32)
-	P.Y.FillBytes(yb)
-	return concat(xb, yb)
+	bb := make([]byte, 64)
+	P.X.FillBytes(bb[0:32])
+	P.Y.FillBytes(bb[32:64])
+	return bb
 }
 
 func PointFrom(b []byte) Point {
@@ -54,13 +53,7 @@ func Copy(P Point) Point {
 }
 
 func (g *Curve) ID() Point {
-    P := g.g()
-    Yneg := new(big.Int).Neg(P.Y)
-    // Yneg.Neg(Yneg)
-
-    Pneg := Point{P.X, Yneg}
-    return EcAdd(P, Pneg)
-    // return Point{big.NewInt(0), big.NewInt(0)}
+    return Point{big.NewInt(0), big.NewInt(0)}
 }
 
 func IsInf(P Point) bool {
