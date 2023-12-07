@@ -1,6 +1,3 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
 name: Go
 
 on:
@@ -10,6 +7,22 @@ on:
     branches: [ "main" ]
 
 jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version-file: "go.mod"
+
+    - name: Format
+      run: |
+        if [ $(gofmt -l . | wc -l) -gt 0 ]; then
+          gofmt -d -e .
+          exit 1
+        fi
 
   build:
     runs-on: ubuntu-latest
@@ -19,7 +32,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.20'
+        go-version-file: "go.mod"
 
     - name: Build
       run: go build -v ./...
