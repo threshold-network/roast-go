@@ -7,10 +7,31 @@ import (
 	"math/big"
 )
 
-type Curve secp256k1.BitCurve
+type FrostCurve [C CurveImpl] struct {
+	curve C
+}
 
-var curve = Curve(*secp256k1.S256())
-var G = &curve
+type CurveImpl interface {
+	ID() *Point
+	// Generator() *Point
+	Order() *big.Int
+	EcMul(*Point, *big.Int) *Point
+	EcAdd(*Point, *Point) *Point
+	EcSub(*Point, *Point) *Point
+	EcBaseMul(*big.Int) *Point
+	Encode(*Point) []byte
+	// Decode([]byte) (*Point, error)
+}
+
+type bip340curve interface {
+	Secp256k1
+}
+
+type Secp256k1 struct {
+	curve *secp256k1.BitCurve
+}
+
+var curve = Secp256k1{secp256k1.S256()}
 
 type Point struct {
 	X *big.Int // the X coordinate of the point
@@ -32,62 +53,71 @@ func (P Point) Bytes() []byte {
 	return bb
 }
 
-func PointFrom(b []byte) Point {
+func PointFrom(b []byte) *Point {
 	xb := make([]byte, 32)
 	copy(xb, b[0:32])
 	x := new(big.Int).SetBytes(xb)
 	yb := make([]byte, 32)
 	copy(yb, b[32:64])
 	y := new(big.Int).SetBytes(yb)
-	return Point{x, y}
+	return &Point{x, y}
 }
 
-func PointsEq(A, B Point) bool {
+func PointsEq(A, B *Point) bool {
 	return A.X.Cmp(B.X) == 0 && A.Y.Cmp(B.Y) == 0
 }
 
-func Copy(P Point) Point {
+func Copy(P *Point) *Point {
 	x := new(big.Int).Set(P.X)
 	y := new(big.Int).Set(P.Y)
-	return Point{x, y}
+	return &Point{x, y}
 }
 
-func (g *Curve) ID() Point {
-    return Point{big.NewInt(0), big.NewInt(0)}
+func (g Secp256k1) ID() *Point {
+    return &Point{big.NewInt(0), big.NewInt(0)}
 }
 
-func IsInf(P Point) bool {
+func IsInf(P *Point) bool {
 	return P.X.Cmp(big.NewInt(0)) == 0
 }
 
-func HasEvenY(P Point) bool {
+func HasEvenY(P *Point) bool {
 	return P.Y.Bit(0) == 0
 }
 
-func EcMul(P Point, s *big.Int) Point {
-	sp := new(big.Int).Mod(s, G.N)
-	Ps_x, Ps_y := (*secp256k1.BitCurve)(G).ScalarMult(P.X, P.Y, sp.Bytes())
-	return Point{Ps_x, Ps_y}
+func (G Secp256k1) EcMul(P *Point, s *big.Int) *Point {
+	sp := new(big.Int).Mod(s, G.curve.N)
+	Ps_x, Ps_y := G.curve.ScalarMult(P.X, P.Y, sp.Bytes())
+	return &Point{Ps_x, Ps_y}
 }
 
-func EcBaseMul(s *big.Int) Point {
-	sp := new(big.Int).Mod(s, G.N)
-	gs_x, gs_y := (*secp256k1.BitCurve)(G).ScalarBaseMult(sp.Bytes())
-	return Point{gs_x, gs_y}
+func (G Secp256k1) EcBaseMul(s *big.Int) *Point {
+	sp := new(big.Int).Mod(s, G.curve.N)
+	gs_x, gs_y := G.curve.ScalarBaseMult(sp.Bytes())
+	return &Point{gs_x, gs_y}
 }
 
-func EcAdd(X Point, Y Point) Point {
-	XY_x, XY_y := (*secp256k1.BitCurve)(G).Add(X.X, X.Y, Y.X, Y.Y)
-	return Point{XY_x, XY_y}
+func (G Secp256k1) EcAdd(X *Point, Y *Point) *Point {
+	XY_x, XY_y := G.curve.Add(X.X, X.Y, Y.X, Y.Y)
+	return &Point{XY_x, XY_y}
 }
 
-func EcSub(X Point, Y Point) Point {
-	Yneg := Point{Y.X, new(big.Int).Neg(Y.Y)}
-	return EcAdd(X, Yneg)
+func (G Secp256k1) EcSub(X *Point, Y *Point) *Point {
+	Yneg := &Point{Y.X, new(big.Int).Neg(Y.Y)}
+	return G.EcAdd(X, Yneg)
 }
 
-func SampleFq() *big.Int {
-	b := make([]byte, G.BitSize/8)
+func (G Secp256k1) Encode(P *Point) []byte {
+	return P.Bytes()
+}
+
+func (G Secp256k1) Decode(bs []byte) (*Point, error) {
+	P := PointFrom(bs)
+	return P, nil
+}
+
+func (G Secp256k1) SampleFq() *big.Int {
+	b := make([]byte, G.curve.BitSize/8)
 	i := new(big.Int)
 	for valid := false; !valid; {
 		_, err := rand.Read(b)
@@ -95,27 +125,27 @@ func SampleFq() *big.Int {
 			panic(err)
 		}
 		i.SetBytes(b)
-		if i.Cmp(G.N) < 0 {
+		if i.Cmp(G.curve.N) < 0 {
 			valid = true
 		}
 	}
 	return i
 }
 
-func BytesToFq(b []byte) *big.Int {
+func (G Secp256k1) BytesToFq(b []byte) *big.Int {
 	x := new(big.Int)
 	x.SetBytes(b)
-	x.Mod(x, G.N)
+	x.Mod(x, G.curve.N)
 
 	return x
 }
 
-func (g *Curve) g() Point {
-	x := new(big.Int).Set(g.Gx)
-	y := new(big.Int).Set(g.Gy)
-	return Point{x, y}
+func (g Secp256k1) Generator() *Point {
+	x := new(big.Int).Set(g.curve.Gx)
+	y := new(big.Int).Set(g.curve.Gy)
+	return &Point{x, y}
 }
 
-func (g *Curve) q() *big.Int {
-    return new(big.Int).Set(g.N)
+func (g Secp256k1) Order() *big.Int {
+    return new(big.Int).Set(g.curve.N)
 }

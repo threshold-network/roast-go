@@ -13,7 +13,7 @@ import (
 type Member struct {
 	i uint64
 	skShare *big.Int
-	pkShare Point
+	pkShare *Point
 }
 
 func main() {
@@ -23,8 +23,8 @@ func main() {
 	}
 	pprof.StartCPUProfile(f)
 	defer pprof.StopCPUProfile()
-	n := 400
-	t := 201
+	n := 100
+	t := 51
 
 	// members, pk := RunKeygen(n, t)
 
@@ -88,17 +88,17 @@ func main() {
 	*/
 }
 
-func RunKeygen(n, t int) ([]Member, Point) {
-	sk, pk := GenSharedKey()
+func (G *FrostCurve[C]) RunKeygen(n, t int) ([]Member, *Point) {
+	sk, pk := G.GenSharedKey()
 
-	coeffs := GenPoly(sk, t)
+	coeffs := G.GenPoly(sk, t)
 
 	members := make([]Member, n)
 
 	for j := range members {
 		i := j + 1
-		skShare := CalculatePoly(coeffs, i)
-		pkShare := EcBaseMul(skShare)
+		skShare := G.CalculatePoly(coeffs, i)
+		pkShare := G.curve.EcBaseMul(skShare)
 
 		members[j] = Member{ uint64(i), skShare, pkShare }
 	}
@@ -106,7 +106,7 @@ func RunKeygen(n, t int) ([]Member, Point) {
 	return members, pk
 }
 
-func GenSharedKey() (*big.Int, Point) {
+func (G *FrostCurve[C]) GenSharedKey() (*big.Int, *Point) {
 	b := make([]byte, 32)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -114,20 +114,22 @@ func GenSharedKey() (*big.Int, Point) {
 	}
 
 	sk := OS2IP(b)
-	sk.Mod(sk, G.q())
+	sk.Mod(sk, G.curve.Order())
 
-	pk := EcBaseMul(sk)
+	pk := G.curve.EcBaseMul(sk)
 
 	if !HasEvenY(pk) {
-		sk.Sub(G.q(), sk)
-		pk = EcBaseMul(sk)
+		sk.Sub(G.curve.Order(), sk)
+		pk = G.curve.EcBaseMul(sk)
 	}
 
 	return sk, pk
 }
 
 func RunRoastCh(n, t int, corruption []int) {
-	group, members := Initialise(n, t)
+	G := FrostCurve[Secp256k1]{curve}
+
+	group, members := G.Initialise(n, t)
 	CorruptMembers(members, corruption)
 
 	memberChs := make(map[uint64]MemberCh)
@@ -145,13 +147,13 @@ func RunRoastCh(n, t int, corruption []int) {
 		make(chan SignatureShare, n*2),
 	}
 
-	r1 := group.NewCoordinator([]byte("test"), 1)
+	r1 := G.NewCoordinator(group, []byte("test"), 1)
 
 	var wg sync.WaitGroup
 	wg.Add(len(members) + 1)
 
 	for _, member := range members {
-		go func(member MemberState, ch MemberCh) {
+		go func(member MemberState[Secp256k1], ch MemberCh) {
 			defer wg.Done()
 			member.RunMember(coordinatorCh, ch)
 		}(member, memberChs[member.i])
@@ -166,11 +168,13 @@ func RunRoastCh(n, t int, corruption []int) {
 }
 
 func RunRoast(n, t int) {
-	group, members := Initialise(n, t)
+	G := FrostCurve[Secp256k1]{curve}
+
+	group, members := G.Initialise(n, t)
 	
 	members[1].behaviour = DoesNotCommit
 
-	r1 := group.NewCoordinator([]byte("test"), 1)
+	r1 := G.NewCoordinator(group, []byte("test"), 1)
 
 	commitRequest := r1.RequestCommits()
 

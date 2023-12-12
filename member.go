@@ -31,18 +31,19 @@ type MemberResponse struct {
 	spent bool
 }
 
-type MemberState struct {
+type MemberState [C CurveImpl] struct {
+	G *FrostCurve[C]
 	i uint64
 	behaviour int
-	pk Point
-	pki Point
+	pk *Point
+	pki *Point
 	ski *big.Int
 	// hash(coordinator index, commitHash) -> response to that coordinator
 	responses map[[32]byte]*MemberResponse
 }
 
 // respond to a commit request
-func (S *MemberState) RespondC(r CommitRequest) *Commit {
+func (S *MemberState[C]) RespondC(r CommitRequest) *Commit {
 	//
 	// Bad behaviour
 	//
@@ -54,7 +55,7 @@ func (S *MemberState) RespondC(r CommitRequest) *Commit {
 	//
 	//
 
-	n, c := round1(S.i, S.ski)
+	n, c := S.G.round1(S.i, S.ski)
 
 	res := MemberResponse{ c, n, false }
 
@@ -66,7 +67,7 @@ func (S *MemberState) RespondC(r CommitRequest) *Commit {
 }
 
 // respond to a signing request
-func (S *MemberState) RespondS(r SignRequest) *SignatureShare {
+func (S *MemberState[C]) RespondS(r SignRequest) *SignatureShare {
 	//
 	// Bad behaviour
 	//
@@ -107,7 +108,7 @@ func (S *MemberState) RespondS(r SignRequest) *SignatureShare {
 	}
 
 	// Make a new commit
-	nn, cc := round1(S.i, S.ski)
+	nn, cc := S.G.round1(S.i, S.ski)
 
 	newres := MemberResponse{ cc, nn, false }
 
@@ -133,7 +134,7 @@ func (S *MemberState) RespondS(r SignRequest) *SignatureShare {
 
 	n := found.nonce
 
-	share := round2(S.i, S.ski, S.pk, n, r.message, r.commits)
+	share := S.G.round2(S.i, S.ski, S.pk, n, r.message, r.commits)
 
 	// Wipe the nonce to prevent reuse
 	found.nonce = Nonce{nil, nil}
@@ -142,7 +143,7 @@ func (S *MemberState) RespondS(r SignRequest) *SignatureShare {
 	return &SignatureShare{requestId, share, cc}
 }
 
-func (S *MemberState) RunMember(
+func (S *MemberState[C]) RunMember(
 	outCh CoordinatorCh,
 	inCh MemberCh,
 ) {

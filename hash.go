@@ -65,7 +65,7 @@ func hashToScalar(tag, msg []byte) *big.Int {
 	hashed := BIP340Hash(tag, msg)
 
 	ej := OS2IP(hashed[:])
-	ej.Mod(ej, G.N)
+	ej.Mod(ej, curve.curve.N)
 
 	return ej
 }

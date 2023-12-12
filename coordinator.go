@@ -19,7 +19,8 @@ const (
 	ChangesMessage = iota
 )
 
-type RoastExecution struct {
+type RoastExecution [C CurveImpl] struct {
+	G *FrostCurve[C]
 	group *GroupData
 	coordinatorIndex uint64
 	behaviour int
@@ -36,7 +37,7 @@ type RoastRequest struct {
 	Precalc *SigVerifyPrecalc
 }
 
-func (R *RoastExecution) RequestCommits() *CommitRequest {
+func (R *RoastExecution[C]) RequestCommits() *CommitRequest {
 	//
 	// Bad behaviour
 	//
@@ -50,7 +51,7 @@ func (R *RoastExecution) RequestCommits() *CommitRequest {
 	return &CommitRequest{R.coordinatorIndex, R.message}
 }
 
-func (R *RoastExecution) HasBad(i uint64) bool {
+func (R *RoastExecution[C]) HasBad(i uint64) bool {
 	for _, bad := range R.badMembers {
 		if i == bad {
 			return true
@@ -62,7 +63,7 @@ func (R *RoastExecution) HasBad(i uint64) bool {
 
 // Coordinator behaviour:
 // Receive a response from a member
-func (R *RoastExecution) ReceiveCommit(commit Commit) *SignRequest {
+func (R *RoastExecution[C]) ReceiveCommit(commit Commit) *SignRequest {
 	// filter out bad members' commits so we reject them in the future
 	if R.HasBad(commit.i) {
 		return nil
@@ -145,7 +146,7 @@ func InsertCommit(ccs []Commit, c Commit) []Commit {
 	return cs
 }
 
-func (R *RoastExecution) ReceiveShare(memberId uint64, requestId [32]byte, share *big.Int) *BIP340Signature {
+func (R *RoastExecution[C]) ReceiveShare(memberId uint64, requestId [32]byte, share *big.Int) *BIP340Signature {
 	req := R.requests[requestId]
 	cs := req.Commitments
 	res := req.Responses
@@ -160,7 +161,7 @@ func (R *RoastExecution) ReceiveShare(memberId uint64, requestId [32]byte, share
 	if !found {
 		return nil
 	}
-	shareGood := verifySignatureSharePrecalc(
+	shareGood := R.G.verifySignatureSharePrecalc(
 		memberId,
 		R.group.PubkeyShares[memberId],
 		commit,
@@ -187,13 +188,13 @@ func (R *RoastExecution) ReceiveShare(memberId uint64, requestId [32]byte, share
 		shares = append(shares, share)
 	}
 
-	sig := aggregate(R.group.Pubkey, cs, R.message, shares)
+	sig := R.G.aggregate(R.group.Pubkey, cs, R.message, shares)
 	bipSig := ToBIP340(sig)
 
 	// We return a good BIP-340 signature 50% of the time,
 	// so we need to check if this one is valid.
 	// If valid, we can finish.
-	sigGood := BIP340Verify(bipSig, R.group.Pubkey.ToBytes32(), R.message)
+	sigGood := BIP340Verify(curve, bipSig, R.group.Pubkey.ToBytes32(), R.message)
 
 	if sigGood {
 		return &bipSig
@@ -213,7 +214,7 @@ func SendSignRequests(
 	}
 }
 
-func (R *RoastExecution) RunCoordinator(
+func (R *RoastExecution[C]) RunCoordinator(
 	inCh CoordinatorCh,
 	outChs map[uint64]MemberCh,
 ) BIP340Signature {

@@ -8,11 +8,11 @@ import (
 
 
 type GroupData struct {
-	Pubkey Point
+	Pubkey *Point
 	N int
 	T int
 	Ids []uint64
-	PubkeyShares map[uint64]Point
+	PubkeyShares map[uint64]*Point
 }
 
 type CommitRequest struct {
@@ -46,29 +46,30 @@ type MemberCh struct {
 	done chan bool
 }
 
-func Initialise(n, t int) (*GroupData, []MemberState) {
+func (G *FrostCurve[C]) Initialise(n, t int) (*GroupData, []MemberState[C]) {
 	memberIds := make([]uint64, n)
-	memberStates := make([]MemberState, n)
+	memberStates := make([]MemberState[C], n)
 
-	sk, pk := GenSharedKey()
+	sk, pk := G.GenSharedKey()
 
 	group := GroupData{
 		pk,
 		n,
 		t,
 		memberIds,
-		make(map[uint64]Point),
+		make(map[uint64]*Point),
 	}
 
-	coeffs := GenPoly(sk, t)
+	coeffs := G.GenPoly(sk, t)
 
 	for j := range memberStates {
 		i := j + 1
 		group.Ids[j] = uint64(i)
-		skShare := CalculatePoly(coeffs, i)
-		pkShare := EcBaseMul(skShare)
+		skShare := G.CalculatePoly(coeffs, i)
+		pkShare := G.curve.EcBaseMul(skShare)
 
-		memberStates[j] = MemberState{
+		memberStates[j] = MemberState[C]{
+			G,
 			uint64(i),
 			GoodMember,
 			pk,
@@ -83,9 +84,10 @@ func Initialise(n, t int) (*GroupData, []MemberState) {
 	return &group, memberStates
 }
 
-func (G *GroupData) NewCoordinator(message []byte, i uint64) *RoastExecution {
-	return &RoastExecution{
+func (G *FrostCurve[C]) NewCoordinator(GD *GroupData, message []byte, i uint64) *RoastExecution[C] {
+	return &RoastExecution[C]{
 		G,
+		GD,
 		i,
 		GoodCoordinator,
 		message,
@@ -95,13 +97,13 @@ func (G *GroupData) NewCoordinator(message []byte, i uint64) *RoastExecution {
 	}
 }
 
-func CorruptMembers(members []MemberState, behaviours []int) {
+func CorruptMembers[C CurveImpl] (members []MemberState[C], behaviours []int) {
 	for i, b := range behaviours {
 		members[i].behaviour = b
 	}
 }
 
-func (R *RoastExecution) CorruptCoordinator(behaviour int) {
+func (R *RoastExecution[C]) CorruptCoordinator(behaviour int) {
 	R.behaviour = behaviour
 }
 

@@ -8,7 +8,7 @@ import (
 // Create a polynomial with degree t-1
 // Return an array of t elements,
 // where each term of the polynomial equals arr[i] * x^i
-func GenPoly(secret *big.Int, t int) []*big.Int {
+func (G *FrostCurve[C]) GenPoly(secret *big.Int, t int) []*big.Int {
 	arr := make([]*big.Int, t)
 	arr[0] = secret
 	for i := 1; i < t ; i++ {
@@ -17,18 +17,18 @@ func GenPoly(secret *big.Int, t int) []*big.Int {
 		if err != nil {
 			panic(err)
 		}
-		arr[i] = new(big.Int).Mod(OS2IP(b), G.q())
+		arr[i] = new(big.Int).Mod(OS2IP(b), G.curve.Order())
 	}
 	return arr
 }
 
-func CalculatePoly(coeffs []*big.Int, x int) *big.Int {
+func (G *FrostCurve[C]) CalculatePoly(coeffs []*big.Int, x int) *big.Int {
 	res := new(big.Int)
 
 	bigX := big.NewInt(int64(x))
 
 	for i, coeff := range coeffs {
-		tmp := new(big.Int).Exp(bigX, big.NewInt(int64(i)), G.q())
+		tmp := new(big.Int).Exp(bigX, big.NewInt(int64(i)), G.curve.Order())
 		tmp.Mul(tmp, coeff)
 		res.Add(res, tmp)
 	}
@@ -62,7 +62,7 @@ func CalculatePoly(coeffs []*big.Int, x int) *big.Int {
      x-coordinate is represented more than once in L.
 */
 // def derive_interpolating_value(L, x_i):
-func deriveInterpolatingValue(xi uint64, L []uint64) *big.Int {
+func (G *FrostCurve[C]) deriveInterpolatingValue(xi uint64, L []uint64) *big.Int {
 	found := false
 	// numerator = Scalar(1)
 	num := big.NewInt(1)
@@ -83,10 +83,10 @@ func deriveInterpolatingValue(xi uint64, L []uint64) *big.Int {
 		}
 		// numerator *= x_j
 		num.Mul(num, big.NewInt(int64(xj)))
-		num.Mod(num, G.N)
+		num.Mod(num, G.curve.Order())
 		// denominator *= x_j - x_i
 		den.Mul(den, big.NewInt(int64(xj) - int64(xi)))
-		den.Mod(den, G.N)
+		den.Mod(den, G.curve.Order())
 	}
 
 	// if x_i not in L:
@@ -97,9 +97,9 @@ func deriveInterpolatingValue(xi uint64, L []uint64) *big.Int {
 	// value = numerator / denominator
 	// return value
 
-	denInv := new(big.Int).ModInverse(den, G.N)
+	denInv := new(big.Int).ModInverse(den, G.curve.Order())
 	res := new(big.Int).Mul(num, denInv)
-	res = res.Mod(res, G.N)
+	res = res.Mod(res, G.curve.Order())
 
 	return res
 }

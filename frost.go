@@ -21,8 +21,8 @@ func genNonce(secret []byte) *big.Int {
 
 type Commit struct {
 	i uint64 // participant index
-	hnc Point // hiding nonce commitment
-	bnc Point // blinding nonce commitment
+	hnc *Point // hiding nonce commitment
+	bnc *Point // blinding nonce commitment
 }
 
 type BindingFactor struct {
@@ -36,7 +36,7 @@ type Nonce struct {
 }
 
 type Signature struct {
-	R Point
+	R *Point
 	z *big.Int
 }
 
@@ -71,7 +71,7 @@ func toBytes(x uint64) []byte {
      commitment_list, a byte string.
 */
 // def encode_group_commitment_list(commitment_list):
-func encodeGroupCommitment(cs []Commit) []byte {
+func (G *FrostCurve[C]) encodeGroupCommitment(cs []Commit) []byte {
 	// encoded_group_commitment = nil
 
 	// preallocate the necessary space to avoid waste
@@ -189,7 +189,7 @@ Outputs:
   representing the binding factors.
 */
 // def compute_binding_factors(group_public_key, commitment_list, msg):
-func computeBindingFactors(pk Point, cs []Commit, msg []byte) []BindingFactor {
+func (G *FrostCurve[C])  computeBindingFactors(pk *Point, cs []Commit, msg []byte) []BindingFactor {
 	// group_public_key_enc = G.SerializeElement(group_public_key)
 	groupPubkeyEnc := pk.Bytes()
 	// // Hashed to a fixed-length.
@@ -197,7 +197,7 @@ func computeBindingFactors(pk Point, cs []Commit, msg []byte) []BindingFactor {
 	msgHash := H4(msg)
 	// encoded_commitment_hash =
 	//    H5(encode_group_commitment_list(commitment_list))
-	encodedCommitHash := H5(encodeGroupCommitment(cs))
+	encodedCommitHash := H5(G.encodeGroupCommitment(cs))
 	// // The encoding of the group public key is a fixed length within a ciphersuite.
 	// rho_input_prefix = group_public_key_enc || msg_hash || encoded_commitment_hash
 	rhoInputPrefix := concat(groupPubkeyEnc, msgHash, encodedCommitHash)
@@ -240,9 +240,9 @@ func computeBindingFactors(pk Point, cs []Commit, msg []byte) []BindingFactor {
    - group_commitment, an Element.
 */
 // def compute_group_commitment(commitment_list, binding_factor_list):
-func computeGroupCommitment(cs []Commit, bfs []BindingFactor) Point {
+func (G *FrostCurve[C]) computeGroupCommitment(cs []Commit, bfs []BindingFactor) *Point {
 	// group_commitment = G.Identity()
-	gc := G.ID()
+	gc := G.curve.ID()
 
 	// for (identifier, hiding_nonce_commitment,
 	//     binding_nonce_commitment) in commitment_list:
@@ -253,12 +253,12 @@ func computeGroupCommitment(cs []Commit, bfs []BindingFactor) Point {
 		// binding_nonce = G.ScalarMult(
 		//     binding_nonce_commitment,
 		//     binding_factor)
-		bn := EcMul(ci.bnc, bf)
+		bn := G.curve.EcMul(ci.bnc, bf)
 		// group_commitment = (
 		//     group_commitment +
 		//     hiding_nonce_commitment +
 		//     binding_nonce)
-		gc = EcAdd(gc, EcAdd(ci.hnc, bn))
+		gc = G.curve.EcAdd(gc, G.curve.EcAdd(ci.hnc, bn))
 	}
 
 	// return group_commitment
@@ -281,7 +281,7 @@ func computeGroupCommitment(cs []Commit, bfs []BindingFactor) Point {
    - challenge, a Scalar.
 */
 // def compute_challenge(group_commitment, group_public_key, msg):
-func computeChallenge(gc Point, pk Point, msg []byte) *big.Int {
+func (G *FrostCurve[C]) computeChallenge(gc *Point, pk *Point, msg []byte) *big.Int {
 	// group_comm_enc = G.SerializeElement(group_commitment)
 	// group_public_key_enc = G.SerializeElement(group_public_key)
 	// challenge_input = group_comm_enc || group_public_key_enc || msg
@@ -315,15 +315,15 @@ func computeChallenge(gc Point, pk Point, msg []byte) *big.Int {
      the nonce commitment pair is an Element.
 */
 // def commit(sk_i):
-func round1(i uint64, ski *big.Int) (Nonce, Commit) {
+func (G *FrostCurve[C]) round1(i uint64, ski *big.Int) (Nonce, Commit) {
 	// hiding_nonce = nonce_generate(sk_i)
 	hn := genNonce(ski.Bytes())
 	// binding_nonce = nonce_generate(sk_i)
 	bn := genNonce(ski.Bytes())
 	// hiding_nonce_commitment = G.ScalarBaseMult(hiding_nonce)
-	hnc := EcBaseMul(hn)
+	hnc := G.curve.EcBaseMul(hn)
 	// binding_nonce_commitment = G.ScalarBaseMult(binding_nonce)
-	bnc := EcBaseMul(bn)
+	bnc := G.curve.EcBaseMul(bn)
 
 	// nonces = (hiding_nonce, binding_nonce)
 	// comms = (hiding_nonce_commitment, binding_nonce_commitment)
@@ -379,26 +379,26 @@ Outputs:
 */
 // def sign(identifier, sk_i, group_public_key,
 //          nonce_i, msg, commitment_list):
-func round2(i uint64, ski *big.Int, pk Point, nonce Nonce, msg []byte, cs []Commit) *big.Int {
+func (G *FrostCurve[C]) round2(i uint64, ski *big.Int, pk *Point, nonce Nonce, msg []byte, cs []Commit) *big.Int {
 	// # Compute the binding factor(s)
 	// binding_factor_list = compute_binding_factors(group_public_key, commitment_list, msg)
-	bfs := computeBindingFactors(pk, cs, msg)
+	bfs := G.computeBindingFactors(pk, cs, msg)
 	// binding_factor = binding_factor_for_participant(binding_factor_list, identifier)
 	bf := bindingFactorForParticipant(bfs, i)
 
 	// # Compute the group commitment
 	// group_commitment = compute_group_commitment(commitment_list, binding_factor_list)
-	gc := computeGroupCommitment(cs, bfs)
+	gc := G.computeGroupCommitment(cs, bfs)
 
 	// # Compute the interpolating value
 	// participant_list = participants_from_commitment_list(commitment_list)
 	members := participantsFromCommitList(cs)
 	// lambda_i = derive_interpolating_value(participant_list, identifier)
-	lambda_i := deriveInterpolatingValue(i, members)
+	lambda_i := G.deriveInterpolatingValue(i, members)
 
 	// # Compute the per-message challenge
 	// challenge = compute_challenge(group_commitment, group_public_key, msg)
-	challenge := computeChallenge(gc, pk, msg)
+	challenge := G.computeChallenge(gc, pk, msg)
 
 	// # Compute the signature share
 	// (hiding_nonce, binding_nonce) = nonce_i
@@ -446,14 +446,14 @@ Outputs:
   Scalar z.
 */
 // def aggregate(commitment_list, msg, group_public_key, sig_shares):
-func aggregate(pk Point, cs []Commit, msg []byte, shares []*big.Int) Signature {
+func (G *FrostCurve[C]) aggregate(pk *Point, cs []Commit, msg []byte, shares []*big.Int) Signature {
 	// # Compute the binding factors
 	// binding_factor_list = compute_binding_factors(group_public_key, commitment_list, msg)
-	bfs := computeBindingFactors(pk, cs, msg)
+	bfs := G.computeBindingFactors(pk, cs, msg)
 
 	// # Compute the group commitment
 	// group_commitment = compute_group_commitment(commitment_list, binding_factor_list)
-	gc := computeGroupCommitment(cs, bfs)
+	gc := G.computeGroupCommitment(cs, bfs)
 
 	// # Compute aggregated signature
 	// z = Scalar(0)
@@ -462,12 +462,12 @@ func aggregate(pk Point, cs []Commit, msg []byte, shares []*big.Int) Signature {
     //     z = z + z_i
 	for _, zi := range shares {
 		z.Add(z, zi)
-		z.Mod(z, G.q())
+		z.Mod(z, G.curve.Order())
 	}
 
-	e := computeChallenge(gc, pk, msg)
+	e := G.computeChallenge(gc, pk, msg)
 
-	R := EcSub(EcBaseMul(z), EcMul(pk, e))
+	R := G.curve.EcSub(G.curve.EcBaseMul(z), G.curve.EcMul(pk, e))
 	fmt.Println(R.Y)
 
 	// return (group_commitment, z)
@@ -507,49 +507,49 @@ Outputs:
 // def verify_signature_share(
 //     identifier, PK_i, comm_i, sig_share_i, commitment_list,
 //     group_public_key, msg):
-func verifySignatureShare(
+func (G *FrostCurve[C]) verifySignatureShare(
 	i uint64,
-	pk_i Point,
+	pk_i *Point,
 	commit_i Commit,
 	sigShare_i *big.Int,
 	cs []Commit,
-	pk Point,
+	pk *Point,
 	msg []byte,
 ) bool {
 	// # Compute the binding factors
 	// binding_factor_list = compute_binding_factors(group_public_key, commitment_list, msg)
-	bfs := computeBindingFactors(pk, cs, msg)
+	bfs := G.computeBindingFactors(pk, cs, msg)
 	// binding_factor = binding_factor_for_participant(binding_factor_list, identifier)
 	bf := bindingFactorForParticipant(bfs, i)
 
 	// # Compute the group commitment
 	// group_commitment = compute_group_commitment(commitment_list, binding_factor_list)
-	gc := computeGroupCommitment(cs, bfs)
+	gc := G.computeGroupCommitment(cs, bfs)
 
 	// # Compute the commitment share
 	// (hiding_nonce_commitment, binding_nonce_commitment) = comm_i
 	// comm_share = hiding_nonce_commitment + G.ScalarMult(
 	//     binding_nonce_commitment, binding_factor)
-	cShare := EcAdd(commit_i.hnc, EcMul(commit_i.bnc, bf))
+	cShare := G.curve.EcAdd(commit_i.hnc, G.curve.EcMul(commit_i.bnc, bf))
 
 	// # Compute the challenge
 	// challenge = compute_challenge(
 	//     group_commitment, group_public_key, msg)
-	challenge := computeChallenge(gc, pk, msg)
+	challenge := G.computeChallenge(gc, pk, msg)
 
 	// # Compute the interpolating value
 	// participant_list = participants_from_commitment_list(commitment_list)
 	members := participantsFromCommitList(cs)
 	// lambda_i = derive_interpolating_value(participant_list, identifier)
-	lambda_i := deriveInterpolatingValue(i, members)
+	lambda_i := G.deriveInterpolatingValue(i, members)
 
 	cli := new(big.Int).Mul(challenge, lambda_i)
 
 	// # Compute relation values
 	// l = G.ScalarBaseMult(sig_share_i)
-	l := EcBaseMul(sigShare_i)
+	l := G.curve.EcBaseMul(sigShare_i)
 	// r = comm_share + G.ScalarMult(PK_i, challenge * lambda_i)
-	r := EcAdd(cShare, EcMul(pk_i, cli))
+	r := G.curve.EcAdd(cShare, G.curve.EcMul(pk_i, cli))
 
 	// return l == r
 	return PointsEq(l, r)
@@ -559,32 +559,32 @@ func verifySignatureShare(
 // only calculating them on the first call on the attempt.
 // This constitutes a major saving in coordinator overhead,
 // especially with large group sizes.
-func verifySignatureSharePrecalc(
+func (G *FrostCurve[C]) verifySignatureSharePrecalc(
 	i uint64,
-	pk_i Point,
+	pk_i *Point,
 	commit_i Commit,
 	sigShare_i *big.Int,
 	cs []Commit,
-	pk Point,
+	pk *Point,
 	msg []byte,
 	precalc *SigVerifyPrecalc,
 ) bool {
 	// Use the challenge's *big.Int pointer to see whether values have been cached.
 	if precalc.challenge == nil {
-		bfs := computeBindingFactors(pk, cs, msg)
-		gc := computeGroupCommitment(cs, bfs)
-		challenge := computeChallenge(gc, pk, msg)
+		bfs := G.computeBindingFactors(pk, cs, msg)
+		gc := G.computeGroupCommitment(cs, bfs)
+		challenge := G.computeChallenge(gc, pk, msg)
 
 		precalc.bfs = bfs
 		precalc.challenge = challenge
 	}
 	bf := bindingFactorForParticipant(precalc.bfs, i)
-	cShare := EcAdd(commit_i.hnc, EcMul(commit_i.bnc, bf))
+	cShare := G.curve.EcAdd(commit_i.hnc, G.curve.EcMul(commit_i.bnc, bf))
 	members := participantsFromCommitList(cs)
-	lambda_i := deriveInterpolatingValue(i, members)
+	lambda_i := G.deriveInterpolatingValue(i, members)
 	cli := new(big.Int).Mul(precalc.challenge, lambda_i)
-	l := EcBaseMul(sigShare_i)
-	r := EcAdd(cShare, EcMul(pk_i, cli))
+	l := G.curve.EcBaseMul(sigShare_i)
+	r := G.curve.EcAdd(cShare, G.curve.EcMul(pk_i, cli))
 	return PointsEq(l, r)
 }
 
