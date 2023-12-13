@@ -5,22 +5,43 @@ import (
 	"math/big"
 )
 
-// The contextString as defined in section 6.5. FROST(secp256k1, SHA-256) of
-// [FROST] is "FROST-secp256k1-SHA256-v1". Since we do a BIP-340 specialized
-// version, we use "FROST-secp256k1-BIP340-v1" as the contextString.
-var contextString = []byte("FROST-secp256k1-BIP340-v1")
+// Hash interface abstracts out hash functions implementations specific to the
+// ciphersuite used. This is a strategy design pattern allowing to use FROST
+// with different ciphersuites, like secp256k1 or Jubjub curves.
+//
+// [FROST] requires the use of a cryptographically secure hash function,
+// generically written as H. Using H, [FROST] introduces distinct domain-separated
+// hashes, H1, H2, H3, H4, and H5. The details of H1, H2, H3, H4, and H5 vary
+// based on ciphersuite.
+type Hash interface {
+	H1(m []byte) *big.Int
+}
 
-// h1 is the implementation of H1(m) function from [FROST] implemented in a way
+// Bip340Hash is [BIP340] implementation of [FROST] functions required by the
+// `Hash` interface.
+type Bip340Hash struct {
+}
+
+// H1 is the implementation of H1(m) function from [FROST] implemented in a way
 // compatible to how [BIP340] hashing functions are specified.
-func h1(m []byte) *big.Int {
-	dst := concat(contextString, []byte("rho"))
-	return hashToScalar(dst, m)
+func (b *Bip340Hash) H1(m []byte) *big.Int {
+	dst := concat(b.contextString(), []byte("rho"))
+	return b.hashToScalar(dst, m)
+}
+
+// contextString is a contextString as required by [FROST] to be used in tagged
+// hashes. The value is specific to [BIP340] ciphersuite.
+func (b *Bip340Hash) contextString() []byte {
+	// The contextString as defined in section 6.5. FROST(secp256k1, SHA-256) of
+	// [FROST] is "FROST-secp256k1-SHA256-v1". Since we do a BIP-340 specialized
+	// version, we use "FROST-secp256k1-BIP340-v1".
+	return []byte("FROST-secp256k1-BIP340-v1")
 }
 
 // hashToScalar computes [BIP340] tagged hash of the message and turns it into
 // a scalar modulo secp256k1 curve order, as specified in [BIP340].
-func hashToScalar(tag, msg []byte) *big.Int {
-	hashed := bip340Hash(tag, msg)
+func (b *Bip340Hash) hashToScalar(tag, msg []byte) *big.Int {
+	hashed := b.hash(tag, msg)
 	ej := os2ip(hashed[:])
 
 	// This is not safe for all curves. As explained in [BIP340]:
@@ -34,8 +55,8 @@ func hashToScalar(tag, msg []byte) *big.Int {
 	return ej
 }
 
-// bip340Hash implements the hash function as defined in [BIP340].
-func bip340Hash(tag, msg []byte) [32]byte {
+// hash implements the tagged hash function as defined in [BIP340].
+func (b *Bip340Hash) hash(tag, msg []byte) [32]byte {
 	// From [BIP340] specification section:
 	//
 	// The function hash_name(x) where x is a byte array returns the 32-byte hash

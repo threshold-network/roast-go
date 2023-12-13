@@ -8,8 +8,8 @@ import (
 	"threshold.network/roast/internal/testutils"
 )
 
-func TestH1(t *testing.T) {
-	// There are no official test vectors available yet we want to ensure the h1
+func Test_Bip340Hash_H1(t *testing.T) {
+	// There are no official test vectors available. Yet, we want to ensure the H1
 	// function works as we expect it to work before the small change in this
 	// function leads to problems elsewhere unnoticed. We assert it works for
 	// nil and empty value as well as add one dummy test case for a simple message.
@@ -31,15 +31,21 @@ func TestH1(t *testing.T) {
 		},
 	}
 
+	bip340Hash := new(Bip340Hash)
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
 			expected, _ := new(big.Int).SetString(test.expected, 10)
-			testutils.AssertBigIntsEqual(t, "h1 result", expected, h1(test.m))
+			testutils.AssertBigIntsEqual(
+				t,
+				"H1 result",
+				expected,
+				bip340Hash.H1(test.m),
+			)
 		})
 	}
 }
 
-func TestHashToScalar(t *testing.T) {
+func Test_Bip340Hash_hashToScalar(t *testing.T) {
 	var tests = map[string]struct {
 		tag []byte
 		msg []byte
@@ -74,11 +80,12 @@ func TestHashToScalar(t *testing.T) {
 		},
 	}
 
+	bip340Hash := new(Bip340Hash)
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
 			// No official test vectors are available so we only make sure the
 			// function does not panic and returns non-nil and non-zero value.
-			scalar := hashToScalar(test.tag, test.msg)
+			scalar := bip340Hash.hashToScalar(test.tag, test.msg)
 			if scalar == nil {
 				t.Fatal("unexpected nil returned")
 			}
@@ -87,7 +94,7 @@ func TestHashToScalar(t *testing.T) {
 	}
 }
 
-func TestBip340Hash(t *testing.T) {
+func Test_Bip340Hash_hash(t *testing.T) {
 	var tests = map[string]struct {
 		tag []byte
 		msg []byte
@@ -123,12 +130,13 @@ func TestBip340Hash(t *testing.T) {
 	}
 
 	empty := make([]byte, 32)
+	bip340Hash := new(Bip340Hash)
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
 			// No official test vectors are available so we only make sure the
 			// function does not panic and returns non-zero value
-			hash := bip340Hash(test.tag, test.msg)
+			hash := bip340Hash.hash(test.tag, test.msg)
 			if bytes.Equal(hash[:], empty) {
 				t.Fatal("empty bytes")
 			}
