@@ -23,8 +23,7 @@ type Hash interface {
 type Bip340Hash struct {
 }
 
-// H1 is the implementation of H1(m) function from [FROST] implemented in a way
-// compatible to how [BIP340] hashing functions are specified.
+// H1 is the implementation of H1(m) function from [FROST].
 func (b *Bip340Hash) H1(m []byte) *big.Int {
 	// From [FROST], we know the tag should be DST = contextString || "rho".
 	dst := concat(b.contextString(), []byte("rho"))
@@ -33,14 +32,13 @@ func (b *Bip340Hash) H1(m []byte) *big.Int {
 	return b.hashToScalar(dst, m)
 }
 
-// H2 is the implementation of H2(m) function from [FROST] implemented in a way
-// compatible to how [BIP340] hashing functions are specified.
+// H2 is the implementation of H2(m) function from [FROST].
 func (b *Bip340Hash) H2(m []byte, ms ...[]byte) *big.Int {
-	// From [FROST], we know the tag should be DST = contextString || "chal".
-	dst := concat(b.contextString(), []byte("chal"))
-	// We use [BIP340]-compatible hashing algorithm and turn the hash into
-	// a scalar, as expected by [FROST] for H2.
-	return b.hashToScalar(dst, concat(m, ms...))
+	// For H2, we need to use [BIP034] tag because the verification algorithm
+	// from [BIP034] expects this tag to be used:
+	//
+	// Let e = int(hash_BIP0340/challenge(bytes(r) || bytes(P) || m)) mod n.
+	return b.hashToScalar([]byte("BIP0340/challenge"), concat(m, ms...))
 }
 
 // contextString is a contextString as required by [FROST] to be used in tagged
