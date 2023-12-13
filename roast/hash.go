@@ -8,7 +8,7 @@ import (
 // The contextString as defined in section 6.5. FROST(secp256k1, SHA-256) of
 // [FROST] is "FROST-secp256k1-SHA256-v1". Since we do a BIP-340 specialized
 // version, we use "FROST-secp256k1-BIP340-v1" as the contextString.
-var contextString = []byte("FROST-secp256k1-SHA256-v1")
+var contextString = []byte("FROST-secp256k1-BIP340-v1")
 
 // H1 is the implementation of H1(m) function as specified in section
 // 6.5. FROST(secp256k1, SHA-256) of [FROST]. The [BIP340] hash function is used
