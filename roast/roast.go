@@ -13,13 +13,6 @@
 //	draft-irtf-cfrg-frost-15, 5 December 2023,
 //	<https://datatracker.ietf.org/doc/draft-irtf-cfrg-frost/15/>.
 //
-// [HASH-TO-CURVE]
-//
-//	Faz-Hernandez, A., Scott, S., Sullivan, N., Wahby, R. S., and C. A. Wood,
-//	"Hashing to Elliptic Curves", Work in Progress, Internet-Draft,
-//	draft-irtf-cfrg-hash-to-curve- 16, 15 June 2022,
-//	<https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16>.
-//
 // [RFC8017]
 //
 //	Moriarty, K., Ed., Kaliski, B., Jonsson, J., and A. Rusch, "PKCS #1: RSA

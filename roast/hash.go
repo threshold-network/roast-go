@@ -10,24 +10,25 @@ import (
 // version, we use "FROST-secp256k1-BIP340-v1" as the contextString.
 var contextString = []byte("FROST-secp256k1-BIP340-v1")
 
-// H1 is the implementation of H1(m) function as specified in section
-// 6.5. FROST(secp256k1, SHA-256) of [FROST]. The [BIP340] hash function is used
-// as expand_message_xmd.
+// h1 is the implementation of H1(m) function from [FROST] implemented in a way
+// compatible to how [BIP340] hashing functions are specified.
 func h1(m []byte) *big.Int {
 	dst := concat(contextString, []byte("rho"))
 	return hashToScalar(dst, m)
 }
 
-// hashToScalar is the implementation of hash_to_field(msg, 1) from
-// [HASH-TO-CURVE] with m=1 as specified in section 6.5. FROST(secp256k1, SHA-256)
-// of [FROST]. The [BIP340] hash function is used as expand_message_xmd.
+// hashToScalar computes [BIP340] tagged hash of the message and turns it into
+// a scalar modulo secp256k1 curve order, as specified in [BIP340].
 func hashToScalar(tag, msg []byte) *big.Int {
-	// The hash_to_field function is specified in [HASH-TO-CURVE] in section
-	// 5.2. hash_to_field implementation. With count=1, m=1 as specified in
-	// [FROST], the implementation simplifies to just the computation of e_j.
 	hashed := bip340Hash(tag, msg)
-
 	ej := os2ip(hashed[:])
+
+	// This is not safe for all curves. As explained in [BIP340]:
+	//
+	// Note that in general, taking a uniformly random 256-bit integer modulo
+	// the curve order will produce an unacceptably biased result. However, for
+	// the secp256k1 curve, the order is sufficiently close to 2256 that this
+	// bias is not observable (1 - n / 2^256 is around 1.27 * 2^-128).
 	ej.Mod(ej, G.N)
 
 	return ej
