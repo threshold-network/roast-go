@@ -1,0 +1,66 @@
+package testutils
+
+import (
+	"fmt"
+	"math/big"
+	"testing"
+)
+
+// AssertBigIntNonZero checks if the provided not-nil big integer is non-zero.
+// If the provided big integer is zero, it reports a test failure.
+func AssertBigIntNonZero(t *testing.T, description string, actual *big.Int) {
+	if actual.Cmp(big.NewInt(0)) == 0 {
+		t.Errorf("expected %s to be non-zero", description)
+	}
+}
+
+// AssertBigIntsEqual checks if two not-nil big integers are equal. If not, it
+// reports a test failure.
+func AssertBigIntsEqual(t *testing.T, description string, expected *big.Int, actual *big.Int) {
+	if expected.Cmp(actual) != 0 {
+		t.Errorf(
+			"unexpected %s\nexpected: %v\nactual:   %v\n",
+			description,
+			expected,
+			actual,
+		)
+	}
+}
+
+// AssertBytesEqual checks if the two bytes array are equal. If not, it reports
+// a test failure.
+func AssertBytesEqual(t *testing.T, expectedBytes []byte, actualBytes []byte) {
+	err := testBytesEqual(expectedBytes, actualBytes)
+
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func testBytesEqual(expectedBytes []byte, actualBytes []byte) error {
+	minLen := len(expectedBytes)
+	diffCount := 0
+	if actualLen := len(actualBytes); actualLen < minLen {
+		diffCount = minLen - actualLen
+		minLen = actualLen
+	} else {
+		diffCount = actualLen - minLen
+	}
+
+	for i := 0; i < minLen; i++ {
+		if expectedBytes[i] != actualBytes[i] {
+			diffCount++
+		}
+	}
+
+	if diffCount != 0 {
+		return fmt.Errorf(
+			"byte slices differ in %v places\nexpected: [%v]\nactual:   [%v]",
+			diffCount,
+			expectedBytes,
+			actualBytes,
+		)
+	}
+
+	return nil
+}
