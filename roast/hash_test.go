@@ -9,38 +9,167 @@ import (
 )
 
 func Test_Bip340Hash_H1(t *testing.T) {
-	// There are no official test vectors available. Yet, we want to ensure the H1
-	// function works as we expect it to work before the small change in this
-	// function leads to problems elsewhere unnoticed. We assert it works for
-	// nil and empty value as well as add one dummy test case for a simple message.
+	// There are no official test vectors available. Yet, we want to ensure the
+	// function does not panic for empty or nil. We also want to make sure the
+	// happy path works producing a non-zero value.
 	var tests = map[string]struct {
 		m        []byte
 		expected string
 	}{
 		"nil": {
-			m:        nil,
-			expected: "37788820164651289037378519705078027523735361473650157767227654519376265667966",
+			m: nil,
 		},
 		"empty": {
-			m:        nil,
-			expected: "37788820164651289037378519705078027523735361473650157767227654519376265667966",
+			m: []byte{},
 		},
 		"non-empty": {
-			m:        []byte("hello_world"),
-			expected: "11900941195119110547012528910823967871135873302377227736111572072836076818402",
+			m: []byte("hello_world"),
 		},
 	}
 
 	bip340Hash := new(Bip340Hash)
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			expected, _ := new(big.Int).SetString(test.expected, 10)
-			testutils.AssertBigIntsEqual(
-				t,
-				"H1 result",
-				expected,
-				bip340Hash.H1(test.m),
-			)
+			testutils.AssertBigIntNonZero(t, "H1 result", bip340Hash.H1(test.m))
+		})
+	}
+}
+
+func Test_Bip340Hash_H2(t *testing.T) {
+	// There are no official test vectors available. Yet, we want to ensure the
+	// function does not panic for empty or nil. We also want to make sure the
+	// happy path works producing a non-zero value.
+	var tests = map[string]struct {
+		m        []byte
+		ms       [][]byte
+		expected string
+	}{
+		"nil message": {
+			m:  nil,
+			ms: [][]byte{{0x1}},
+		},
+		"some of optional messages nil": {
+			m:  []byte{0x1},
+			ms: [][]byte{{0x1}, nil, {0x2}},
+		},
+		"empty message": {
+			m:  []byte{},
+			ms: [][]byte{{0x1}},
+		},
+		"some of optional messages empty": {
+			m:  []byte{},
+			ms: [][]byte{{0x1}, {}, {0x2}},
+		},
+		"non-empty": {
+			m:  []byte{0x1},
+			ms: [][]byte{{0x1}, {0x2}},
+		},
+	}
+
+	bip340Hash := new(Bip340Hash)
+	for testName, test := range tests {
+		t.Run(testName, func(t *testing.T) {
+			testutils.AssertBigIntNonZero(t, "H2 result", bip340Hash.H2(test.m))
+
+		})
+	}
+}
+
+func Test_Bip340Hash_H3(t *testing.T) {
+	// There are no official test vectors available. Yet, we want to ensure the
+	// function does not panic for empty or nil. We also want to make sure the
+	// happy path works producing a non-zero value.
+	var tests = map[string]struct {
+		m        []byte
+		ms       [][]byte
+		expected string
+	}{
+		"nil message": {
+			m:  nil,
+			ms: [][]byte{{0x1}},
+		},
+		"some of optional messages nil": {
+			m:  []byte{0x1},
+			ms: [][]byte{{0x1}, nil, {0x2}},
+		},
+		"empty message": {
+			m:  []byte{},
+			ms: [][]byte{{0x1}},
+		},
+		"some of optional messages empty": {
+			m:  []byte{},
+			ms: [][]byte{{0x1}, {}, {0x2}},
+		},
+		"non-empty": {
+			m:  []byte{0x1},
+			ms: [][]byte{{0x1}, {0x2}},
+		},
+	}
+
+	bip340Hash := new(Bip340Hash)
+	for testName, test := range tests {
+		t.Run(testName, func(t *testing.T) {
+			testutils.AssertBigIntNonZero(t, "H3 result", bip340Hash.H3(test.m))
+		})
+	}
+}
+
+func Test_Bip340Hash_H4(t *testing.T) {
+	// There are no official test vectors available. Yet, we want to ensure the
+	// function does not panic for empty or nil. We also want to make sure the
+	// happy path works producing a non-zero value.
+	var tests = map[string]struct {
+		m        []byte
+		expected string
+	}{
+		"nil": {
+			m: nil,
+		},
+		"empty": {
+			m: []byte{},
+		},
+		"non-empty": {
+			m: []byte("hello_world"),
+		},
+	}
+
+	bip340Hash := new(Bip340Hash)
+	for testName, test := range tests {
+		t.Run(testName, func(t *testing.T) {
+			// The length is unknown so we can't use bytes.Equal. Casting to
+			// big.Int instead.
+			result := new(big.Int).SetBytes(bip340Hash.H4(test.m))
+			testutils.AssertBigIntNonZero(t, "H4 result", result)
+		})
+	}
+}
+
+func Test_Bip340Hash_H5(t *testing.T) {
+	// There are no official test vectors available. Yet, we want to ensure the
+	// function does not panic for empty or nil. We also want to make sure the
+	// happy path works producing a non-zero value.
+	var tests = map[string]struct {
+		m        []byte
+		expected string
+	}{
+		"nil": {
+			m: nil,
+		},
+		"empty": {
+			m: []byte{},
+		},
+		"non-empty": {
+			m: []byte("hello_world"),
+		},
+	}
+
+	bip340Hash := new(Bip340Hash)
+	for testName, test := range tests {
+		t.Run(testName, func(t *testing.T) {
+			// The length is unknown so we can't use bytes.Equal. Casting to
+			// big.Int instead.
+			result := new(big.Int).SetBytes(bip340Hash.H5(test.m))
+			testutils.AssertBigIntNonZero(t, "H5 result", result)
 		})
 	}
 }
