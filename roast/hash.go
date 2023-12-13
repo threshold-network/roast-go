@@ -21,7 +21,7 @@ type Hash interface {
 	H5(m []byte) []byte
 }
 
-// Bip340Hash is [BIP340] implementation of [FROST] functions required by the
+// Bip340Hash is [BIP-340] implementation of [FROST] functions required by the
 // `Hash` interface.
 type Bip340Hash struct {
 }
@@ -30,19 +30,19 @@ type Bip340Hash struct {
 func (b *Bip340Hash) H1(m []byte) *big.Int {
 	// From [FROST], we know the tag should be DST = contextString || "rho".
 	dst := concat(b.contextString(), []byte("rho"))
-	// We use [BIP340]-compatible hashing algorithm and turn the hash into
+	// We use [BIP-340]-compatible hashing algorithm and turn the hash into
 	// a scalar, as expected by [FROST] for H1.
 	return b.hashToScalar(dst, m)
 }
 
 // H2 is the implementation of H2(m) function from [FROST].
 func (b *Bip340Hash) H2(m []byte, ms ...[]byte) *big.Int {
-	// For H2, we need to use [BIP340] tag because the verification algorithm
+	// For H2, we need to use [BIP-340] tag because the verification algorithm
 	// from [BIP034] expects this tag to be used:
 	//
 	// Let e = int(hash_BIP0340/challenge(bytes(r) || bytes(P) || m)) mod n.
 	//
-	// This is the only H* function where we MUST use the [BIP340] tag.
+	// This is the only H* function where we MUST use the [BIP-340] tag.
 	return b.hashToScalar([]byte("BIP0340/challenge"), concat(m, ms...))
 }
 
@@ -50,7 +50,7 @@ func (b *Bip340Hash) H2(m []byte, ms ...[]byte) *big.Int {
 func (b *Bip340Hash) H3(m []byte, ms ...[]byte) *big.Int {
 	// From [FROST], we know the tag should be DST = contextString || "nonce".
 	dst := concat(b.contextString(), []byte("nonce"))
-	// We use [BIP340]-compatible hashing algorithm and turn the hash into
+	// We use [BIP-340]-compatible hashing algorithm and turn the hash into
 	// a scalar, as expected by [FROST] for H3.
 	return b.hashToScalar(dst, concat(m, ms...))
 }
@@ -72,7 +72,7 @@ func (b *Bip340Hash) H5(m []byte, ms ...[]byte) []byte {
 }
 
 // contextString is a contextString as required by [FROST] to be used in tagged
-// hashes. The value is specific to [BIP340] ciphersuite.
+// hashes. The value is specific to [BIP-340] ciphersuite.
 func (b *Bip340Hash) contextString() []byte {
 	// The contextString as defined in section 6.5. FROST(secp256k1, SHA-256) of
 	// [FROST] is "FROST-secp256k1-SHA256-v1". Since we do a BIP-340 specialized
@@ -80,13 +80,13 @@ func (b *Bip340Hash) contextString() []byte {
 	return []byte("FROST-secp256k1-BIP340-v1")
 }
 
-// hashToScalar computes [BIP340] tagged hash of the message and turns it into
-// a scalar modulo secp256k1 curve order, as specified in [BIP340].
+// hashToScalar computes [BIP-340] tagged hash of the message and turns it into
+// a scalar modulo secp256k1 curve order, as specified in [BIP-340].
 func (b *Bip340Hash) hashToScalar(tag, msg []byte) *big.Int {
 	hashed := b.hash(tag, msg)
 	ej := os2ip(hashed[:])
 
-	// This is not safe for all curves. As explained in [BIP340]:
+	// This is not safe for all curves. As explained in [BIP-340]:
 	//
 	// Note that in general, taking a uniformly random 256-bit integer modulo
 	// the curve order will produce an unacceptably biased result. However, for
@@ -97,9 +97,9 @@ func (b *Bip340Hash) hashToScalar(tag, msg []byte) *big.Int {
 	return ej
 }
 
-// hash implements the tagged hash function as defined in [BIP340].
+// hash implements the tagged hash function as defined in [BIP-340].
 func (b *Bip340Hash) hash(tag, msg []byte) [32]byte {
-	// From [BIP340] specification section:
+	// From [BIP-340] specification section:
 	//
 	// The function hash_name(x) where x is a byte array returns the 32-byte hash
 	// SHA256(SHA256(tag) || SHA256(tag) || x), where tag is the UTF-8 encoding
@@ -135,9 +135,9 @@ func concat(a []byte, bs ...[]byte) []byte {
 }
 
 // os2ip converts byte array into a nonnegative integer as specified in
-// [RFC8017] section 4.2.
+// [RFC-8017] section 4.2.
 func os2ip(b []byte) *big.Int {
-	// From [RFC8017] section 4.2:
+	// From [RFC-8017] section 4.2:
 	//
 	//  1. Let X_1 X_2 ... X_xLen be the octets of X from first to last,
 	//     and let x_(xLen-i) be the integer value of the octet X_i for 1

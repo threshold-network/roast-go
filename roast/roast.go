@@ -1,4 +1,5 @@
-// Package ROAST implements BIP340 specialized version of the ROAST protocol.
+// Package ROAST implements the Robust Asynchronous Schnorr Threshold Signatures
+// protocol. Particularly, the BIP-340 specialized version.
 //
 // [ROAST]
 //
@@ -13,14 +14,14 @@
 //	draft-irtf-cfrg-frost-15, 5 December 2023,
 //	<https://datatracker.ietf.org/doc/draft-irtf-cfrg-frost/15/>.
 //
-// [RFC8017]
+// [RFC-8017]
 //
 //	Moriarty, K., Ed., Kaliski, B., Jonsson, J., and A. Rusch, "PKCS #1: RSA
 //	Cryptography Specifications Version 2.2", RFC 8017, DOI 10.17487/RFC8017,
 //	November 2016,
 //	<https://doi.org/10.17487/RFC8017>.
 //
-// [BIP0340]
+// [BIP-340]
 //
 //	Wuille, P., Nick, J., and Ruffing, T, "Schnorr Signatures for secp256k1",
 //	19 January 2020,
