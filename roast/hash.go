@@ -15,6 +15,7 @@ import (
 // based on ciphersuite.
 type Hash interface {
 	H1(m []byte) *big.Int
+	H2(m []byte, ms ...[]byte) *big.Int
 }
 
 // Bip340Hash is [BIP340] implementation of [FROST] functions required by the
@@ -25,8 +26,21 @@ type Bip340Hash struct {
 // H1 is the implementation of H1(m) function from [FROST] implemented in a way
 // compatible to how [BIP340] hashing functions are specified.
 func (b *Bip340Hash) H1(m []byte) *big.Int {
+	// From [FROST], we know the tag should be DST = contextString || "rho".
 	dst := concat(b.contextString(), []byte("rho"))
+	// We use [BIP340]-compatible hashing algorithm and turn the hash into
+	// a scalar, as expected by [FROST] for H1.
 	return b.hashToScalar(dst, m)
+}
+
+// H2 is the implementation of H2(m) function from [FROST] implemented in a way
+// compatible to how [BIP340] hashing functions are specified.
+func (b *Bip340Hash) H2(m []byte, ms ...[]byte) *big.Int {
+	// From [FROST], we know the tag should be DST = contextString || "chal".
+	dst := concat(b.contextString(), []byte("chal"))
+	// We use [BIP340]-compatible hashing algorithm and turn the hash into
+	// a scalar, as expected by [FROST] for H2.
+	return b.hashToScalar(dst, concat(m, ms...))
 }
 
 // contextString is a contextString as required by [FROST] to be used in tagged
