@@ -1,4 +1,4 @@
-package roast
+package frost
 
 import (
 	"crypto/sha256"

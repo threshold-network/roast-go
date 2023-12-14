@@ -1,4 +1,4 @@
-package roast
+package frost
 
 import "github.com/ethereum/go-ethereum/crypto/secp256k1"
 
