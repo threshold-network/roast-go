@@ -8,7 +8,7 @@ import (
 	"threshold.network/roast/internal/testutils"
 )
 
-func Test_Bip340Ciphersuite_H1(t *testing.T) {
+func TestBip340CiphersuiteH1(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
@@ -35,7 +35,7 @@ func Test_Bip340Ciphersuite_H1(t *testing.T) {
 	}
 }
 
-func Test_Bip340Ciphersuite_H2(t *testing.T) {
+func TestBip340CiphersuiteH2(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
@@ -75,7 +75,7 @@ func Test_Bip340Ciphersuite_H2(t *testing.T) {
 	}
 }
 
-func Test_Bip340Ciphersuite_H3(t *testing.T) {
+func TestBip340CiphersuiteH3(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
@@ -114,7 +114,7 @@ func Test_Bip340Ciphersuite_H3(t *testing.T) {
 	}
 }
 
-func Test_Bip340Ciphersuite_H4(t *testing.T) {
+func TestBip340CiphersuiteH4(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
@@ -144,7 +144,7 @@ func Test_Bip340Ciphersuite_H4(t *testing.T) {
 	}
 }
 
-func Test_Bip340Ciphersuite_H5(t *testing.T) {
+func TestBip340CiphersuiteH5(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
@@ -174,7 +174,7 @@ func Test_Bip340Ciphersuite_H5(t *testing.T) {
 	}
 }
 
-func Test_Bip340Ciphersuite_hashToScalar(t *testing.T) {
+func TestBip340CiphersuiteHashToScalar(t *testing.T) {
 	var tests = map[string]struct {
 		tag []byte
 		msg []byte
@@ -223,7 +223,7 @@ func Test_Bip340Ciphersuite_hashToScalar(t *testing.T) {
 	}
 }
 
-func Test_Bip340Ciphersuite_hash(t *testing.T) {
+func TestBip340CiphersuiteHash(t *testing.T) {
 	var tests = map[string]struct {
 		tag []byte
 		msg []byte
