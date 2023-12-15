@@ -8,6 +8,68 @@ import (
 	"threshold.network/roast/internal/testutils"
 )
 
+func TestBip340CurveSerializedPointLength(t *testing.T) {
+	curve := NewBip340Ciphersuite().Curve()
+
+	point := curve.EcBaseMul(big.NewInt(1119991111222))
+
+	actual := len(curve.SerializePoint(point))
+	expected1 := curve.SerializedPointLength()
+	expected2 := 65 // double-checking in case the underlying implementation changes
+
+	testutils.AssertIntsEqual(t, "byte length", expected1, actual)
+	testutils.AssertIntsEqual(t, "byte length", expected2, actual)
+}
+
+func TestBip340CurveSerializeDeserializePoint(t *testing.T) {
+	curve := NewBip340Ciphersuite().Curve()
+
+	point := curve.EcBaseMul(big.NewInt(1337))
+
+	serialized := curve.SerializePoint(point)
+	deserialized := curve.DeserializePoint(serialized)
+
+	testutils.AssertBigIntsEqual(t, "X coordinate", point.X, deserialized.X)
+	testutils.AssertBigIntsEqual(t, "Y coordinate", point.Y, deserialized.Y)
+}
+
+func TestBip340CurveDeserialize(t *testing.T) {
+	// The happy path is covered by TestBip340CurveSerializeDeserializePoint.
+	// Let's cover the negative path.
+
+	curve := NewBip340Ciphersuite().Curve()
+	point := curve.EcBaseMul(big.NewInt(10))
+
+	serialized := curve.SerializePoint(point)
+
+	var tests = map[string]struct {
+		input []byte
+	}{
+		"nil": {
+			input: nil,
+		},
+		"empty": {
+			input: []byte{},
+		},
+		"one less than expected": {
+			input: serialized[:len(serialized)-1],
+		},
+		"one more than expected": {
+			input: append(serialized, 0x1),
+		},
+	}
+
+	for testName, test := range tests {
+		t.Run(testName, func(t *testing.T) {
+			result := curve.DeserializePoint(test.input)
+			if result != nil {
+				t.Fatalf("nil result expected, got: [%v]", result)
+			}
+		})
+	}
+
+}
+
 func TestBip340CiphersuiteH1(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the

@@ -30,7 +30,24 @@ type Hashing interface {
 // Curve interface abstracts out the particular elliptic curve implementation
 // specific to the ciphersuite used.
 type Curve interface {
+	// EcBaseMul returns k*G, where G is the base point of the group.
 	EcBaseMul(*big.Int) *Point
+
+	// SerializedPointLength returns the byte length of a serialized curve point.
+	// The value is specific to the implementation. It is expected that the
+	// SerializePoint function always return a slice of this length and the
+	// DeserializePoint can only deserialize byte slice of this length.
+	SerializedPointLength() int
+
+	// SerializePoint serializes the provided elliptic curve point to bytes.
+	// The byte slice returned must always have a length equal to
+	// SerializedPointLength().
+	SerializePoint(*Point) []byte
+
+	// DeserializePoint deserializes byte slice to an elliptic curve point. The
+	// byte slice length must be equal to SerializedPointLength(). Otherwise,
+	// the function returns nil.
+	DeserializePoint([]byte) *Point
 }
 
 // Point represents a valid point on the Curve.
