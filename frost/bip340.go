@@ -1,33 +1,45 @@
-package roast
+package frost
 
 import (
 	"crypto/sha256"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
-// Hash interface abstracts out hash functions implementations specific to the
-// ciphersuite used. This is a strategy design pattern allowing to use FROST
-// with different ciphersuites, like secp256k1 or Jubjub curves.
-//
-// [FROST] requires the use of a cryptographically secure hash function,
-// generically written as H. Using H, [FROST] introduces distinct domain-separated
-// hashes, H1, H2, H3, H4, and H5. The details of H1, H2, H3, H4, and H5 vary
-// based on ciphersuite.
-type Hash interface {
-	H1(m []byte) *big.Int
-	H2(m []byte, ms ...[]byte) *big.Int
-	H3(m []byte, ms ...[]byte) *big.Int
-	H4(m []byte) []byte
-	H5(m []byte) []byte
+// Bip340Ciphersuite is [BIP-340] implementation of [FROST] ciphersuite.
+// The ciphersuite uses secp256k1 elliptic curve as the prime-order group and
+// Bitcoin hashing function implementation for H* [FROST] functions.
+type Bip340Ciphersuite struct {
+	curve *Bip340Curve
 }
 
-// Bip340Hash is [BIP-340] implementation of [FROST] functions required by the
-// `Hash` interface.
-type Bip340Hash struct {
+// NewBip340Ciphersuite creates a new instance of Bip340Ciphersuite in a state
+// ready to be used for the [FROST] protocol execution.
+func NewBip340Ciphersuite() *Bip340Ciphersuite {
+	return &Bip340Ciphersuite{
+		curve: &Bip340Curve{secp256k1.S256()},
+	}
+}
+
+// Curve returns secp256k1 curve implementation used in [BIP-340].
+func (b *Bip340Ciphersuite) Curve() Curve {
+	return b.curve
+}
+
+type Bip340Curve struct {
+	*secp256k1.BitCurve
+}
+
+// EcBaseMul returns k*G, where G is the base point of the group.
+func (bc *Bip340Curve) EcBaseMul(k *big.Int) *Point {
+	sp := new(big.Int).Mod(k, bc.N)
+	gs_x, gs_y := bc.ScalarBaseMult(sp.Bytes())
+	return &Point{gs_x, gs_y}
 }
 
 // H1 is the implementation of H1(m) function from [FROST].
-func (b *Bip340Hash) H1(m []byte) *big.Int {
+func (b *Bip340Ciphersuite) H1(m []byte) *big.Int {
 	// From [FROST], we know the tag should be DST = contextString || "rho".
 	dst := concat(b.contextString(), []byte("rho"))
 	// We use [BIP-340]-compatible hashing algorithm and turn the hash into
@@ -36,7 +48,7 @@ func (b *Bip340Hash) H1(m []byte) *big.Int {
 }
 
 // H2 is the implementation of H2(m) function from [FROST].
-func (b *Bip340Hash) H2(m []byte, ms ...[]byte) *big.Int {
+func (b *Bip340Ciphersuite) H2(m []byte, ms ...[]byte) *big.Int {
 	// For H2, we need to use [BIP-340] tag because the verification algorithm
 	// from [BIP034] expects this tag to be used:
 	//
@@ -47,7 +59,7 @@ func (b *Bip340Hash) H2(m []byte, ms ...[]byte) *big.Int {
 }
 
 // H3 is the implementation of H3(m) function from [FROST].
-func (b *Bip340Hash) H3(m []byte, ms ...[]byte) *big.Int {
+func (b *Bip340Ciphersuite) H3(m []byte, ms ...[]byte) *big.Int {
 	// From [FROST], we know the tag should be DST = contextString || "nonce".
 	dst := concat(b.contextString(), []byte("nonce"))
 	// We use [BIP-340]-compatible hashing algorithm and turn the hash into
@@ -56,7 +68,7 @@ func (b *Bip340Hash) H3(m []byte, ms ...[]byte) *big.Int {
 }
 
 // H4 is the implementation of H4(m) function from [FROST].
-func (b *Bip340Hash) H4(m []byte, ms ...[]byte) []byte {
+func (b *Bip340Ciphersuite) H4(m []byte, ms ...[]byte) []byte {
 	// From [FROST], we know the tag should be DST = contextString || "msg".
 	dst := concat(b.contextString(), []byte("msg"))
 	hash := b.hash(dst, m)
@@ -64,7 +76,7 @@ func (b *Bip340Hash) H4(m []byte, ms ...[]byte) []byte {
 }
 
 // H5 is the implementation of H5(m) function from [FROST].
-func (b *Bip340Hash) H5(m []byte, ms ...[]byte) []byte {
+func (b *Bip340Ciphersuite) H5(m []byte, ms ...[]byte) []byte {
 	// From [FROST], we know the tag should be DST = contextString || "com".
 	dst := concat(b.contextString(), []byte("com"))
 	hash := b.hash(dst, m)
@@ -73,7 +85,7 @@ func (b *Bip340Hash) H5(m []byte, ms ...[]byte) []byte {
 
 // contextString is a contextString as required by [FROST] to be used in tagged
 // hashes. The value is specific to [BIP-340] ciphersuite.
-func (b *Bip340Hash) contextString() []byte {
+func (b *Bip340Ciphersuite) contextString() []byte {
 	// The contextString as defined in section 6.5. FROST(secp256k1, SHA-256) of
 	// [FROST] is "FROST-secp256k1-SHA256-v1". Since we do a BIP-340 specialized
 	// version, we use "FROST-secp256k1-BIP340-v1".
@@ -82,7 +94,7 @@ func (b *Bip340Hash) contextString() []byte {
 
 // hashToScalar computes [BIP-340] tagged hash of the message and turns it into
 // a scalar modulo secp256k1 curve order, as specified in [BIP-340].
-func (b *Bip340Hash) hashToScalar(tag, msg []byte) *big.Int {
+func (b *Bip340Ciphersuite) hashToScalar(tag, msg []byte) *big.Int {
 	hashed := b.hash(tag, msg)
 	ej := os2ip(hashed[:])
 
@@ -92,13 +104,13 @@ func (b *Bip340Hash) hashToScalar(tag, msg []byte) *big.Int {
 	// the curve order will produce an unacceptably biased result. However, for
 	// the secp256k1 curve, the order is sufficiently close to 2256 that this
 	// bias is not observable (1 - n / 2^256 is around 1.27 * 2^-128).
-	ej.Mod(ej, G.N)
+	ej.Mod(ej, b.curve.N)
 
 	return ej
 }
 
 // hash implements the tagged hash function as defined in [BIP-340].
-func (b *Bip340Hash) hash(tag, msg []byte) [32]byte {
+func (b *Bip340Ciphersuite) hash(tag, msg []byte) [32]byte {
 	// From [BIP-340] specification section:
 	//
 	// The function hash_name(x) where x is a byte array returns the 32-byte hash

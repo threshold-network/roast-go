@@ -1,4 +1,4 @@
-package roast
+package frost
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"threshold.network/roast/internal/testutils"
 )
 
-func Test_Bip340Hash_H1(t *testing.T) {
+func Test_Bip340Ciphersuite_H1(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
@@ -27,15 +27,15 @@ func Test_Bip340Hash_H1(t *testing.T) {
 		},
 	}
 
-	bip340Hash := new(Bip340Hash)
+	ciphersuite := NewBip340Ciphersuite()
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			testutils.AssertBigIntNonZero(t, "H1 result", bip340Hash.H1(test.m))
+			testutils.AssertBigIntNonZero(t, "H1 result", ciphersuite.H1(test.m))
 		})
 	}
 }
 
-func Test_Bip340Hash_H2(t *testing.T) {
+func Test_Bip340Ciphersuite_H2(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
@@ -66,16 +66,16 @@ func Test_Bip340Hash_H2(t *testing.T) {
 		},
 	}
 
-	bip340Hash := new(Bip340Hash)
+	ciphersuite := NewBip340Ciphersuite()
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			testutils.AssertBigIntNonZero(t, "H2 result", bip340Hash.H2(test.m))
+			testutils.AssertBigIntNonZero(t, "H2 result", ciphersuite.H2(test.m))
 
 		})
 	}
 }
 
-func Test_Bip340Hash_H3(t *testing.T) {
+func Test_Bip340Ciphersuite_H3(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
@@ -106,15 +106,15 @@ func Test_Bip340Hash_H3(t *testing.T) {
 		},
 	}
 
-	bip340Hash := new(Bip340Hash)
+	ciphersuite := NewBip340Ciphersuite()
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			testutils.AssertBigIntNonZero(t, "H3 result", bip340Hash.H3(test.m))
+			testutils.AssertBigIntNonZero(t, "H3 result", ciphersuite.H3(test.m))
 		})
 	}
 }
 
-func Test_Bip340Hash_H4(t *testing.T) {
+func Test_Bip340Ciphersuite_H4(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
@@ -133,18 +133,18 @@ func Test_Bip340Hash_H4(t *testing.T) {
 		},
 	}
 
-	bip340Hash := new(Bip340Hash)
+	ciphersuite := NewBip340Ciphersuite()
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
 			// The length is unknown so we can't use bytes.Equal. Casting to
 			// big.Int instead.
-			result := new(big.Int).SetBytes(bip340Hash.H4(test.m))
+			result := new(big.Int).SetBytes(ciphersuite.H4(test.m))
 			testutils.AssertBigIntNonZero(t, "H4 result", result)
 		})
 	}
 }
 
-func Test_Bip340Hash_H5(t *testing.T) {
+func Test_Bip340Ciphersuite_H5(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
@@ -163,18 +163,18 @@ func Test_Bip340Hash_H5(t *testing.T) {
 		},
 	}
 
-	bip340Hash := new(Bip340Hash)
+	ciphersuite := NewBip340Ciphersuite()
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
 			// The length is unknown so we can't use bytes.Equal. Casting to
 			// big.Int instead.
-			result := new(big.Int).SetBytes(bip340Hash.H5(test.m))
+			result := new(big.Int).SetBytes(ciphersuite.H5(test.m))
 			testutils.AssertBigIntNonZero(t, "H5 result", result)
 		})
 	}
 }
 
-func Test_Bip340Hash_hashToScalar(t *testing.T) {
+func Test_Bip340Ciphersuite_hashToScalar(t *testing.T) {
 	var tests = map[string]struct {
 		tag []byte
 		msg []byte
@@ -209,12 +209,12 @@ func Test_Bip340Hash_hashToScalar(t *testing.T) {
 		},
 	}
 
-	bip340Hash := new(Bip340Hash)
+	ciphersuite := NewBip340Ciphersuite()
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
 			// No official test vectors are available so we only make sure the
 			// function does not panic and returns non-nil and non-zero value.
-			scalar := bip340Hash.hashToScalar(test.tag, test.msg)
+			scalar := ciphersuite.hashToScalar(test.tag, test.msg)
 			if scalar == nil {
 				t.Fatal("unexpected nil returned")
 			}
@@ -223,7 +223,7 @@ func Test_Bip340Hash_hashToScalar(t *testing.T) {
 	}
 }
 
-func Test_Bip340Hash_hash(t *testing.T) {
+func Test_Bip340Ciphersuite_hash(t *testing.T) {
 	var tests = map[string]struct {
 		tag []byte
 		msg []byte
@@ -259,13 +259,13 @@ func Test_Bip340Hash_hash(t *testing.T) {
 	}
 
 	empty := make([]byte, 32)
-	bip340Hash := new(Bip340Hash)
+	ciphersuite := NewBip340Ciphersuite()
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
 			// No official test vectors are available so we only make sure the
 			// function does not panic and returns non-zero value
-			hash := bip340Hash.hash(test.tag, test.msg)
+			hash := ciphersuite.hash(test.tag, test.msg)
 			if bytes.Equal(hash[:], empty) {
 				t.Fatal("empty bytes")
 			}
