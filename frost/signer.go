@@ -2,6 +2,7 @@ package frost
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 )
@@ -83,4 +84,58 @@ func (s *Signer) generateNonce(secret []byte) (*big.Int, error) {
 	// secret_enc = G.SerializeScalar(secret)
 	// return H3(random_bytes || secret_enc)
 	return s.ciphersuite.H3(b, secret), nil
+}
+
+// TODO: check if nonce commitment is a valid point on the curve
+// TODO: check if it is not an identity element
+// TODO: check if the commitment list is sorted
+func (s *Signer) encodeGroupCommitment(commitments []NonceCommitment) []byte {
+	// From [FROST]:
+	//
+	// 4.3.  List Operations
+	//
+	//   This section describes helper functions that work on lists of values
+	//   produced during the FROST protocol.  The following function encodes a
+	//   list of participant commitments into a byte string for use in the
+	//   FROST protocol.
+	//
+	//   Inputs:
+	//     - commitment_list = [(i, hiding_nonce_commitment_i,
+	//       binding_nonce_commitment_i), ...], a list of commitments issued by
+	//       each participant, where each element in the list indicates a
+	//       NonZeroScalar identifier i and two commitment Element values
+	//       (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
+	//       MUST be sorted in ascending order by identifier.
+	//
+	//   Outputs:
+	//     - encoded_group_commitment, the serialized representation of
+	//       commitment_list, a byte string.
+
+	curve := s.ciphersuite.Curve()
+	ecPointLength := curve.SerializedPointLength()
+
+	// preallocate the necessary space to avoid waste:
+	// 8 bytes for signerIndex (uint64)
+	// ecPointLength for hidingNonceCommitment
+	// ecPointLength for bindingNonceCommitment
+	b := make([]byte, 0, (8+2*ecPointLength)*len(commitments))
+
+	// encoded_group_commitment = nil
+	// for (identifier, hiding_nonce_commitment,
+	//      binding_nonce_commitment) in commitment_list:
+	for _, c := range commitments {
+		// encoded_commitment = (
+		//     G.SerializeScalar(identifier) ||
+		//     G.SerializeElement(hiding_nonce_commitment) ||
+		//     G.SerializeElement(binding_nonce_commitment))
+		// encoded_group_commitment = (
+		//     encoded_group_commitment ||
+		//     encoded_commitment)
+		b = binary.BigEndian.AppendUint64(b, c.signerIndex)
+		b = append(b, curve.SerializePoint(c.hidingNonceCommitment)...)
+		b = append(b, curve.SerializePoint(c.bindingNonceCommitment)...)
+	}
+
+	// return encoded_group_commitment
+	return b
 }
