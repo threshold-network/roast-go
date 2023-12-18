@@ -38,6 +38,43 @@ func (bc *Bip340Curve) EcBaseMul(k *big.Int) *Point {
 	return &Point{gs_x, gs_y}
 }
 
+// IsNotIdentity validates if the point lies on the curve and is not an identity
+// element.
+func (bc *Bip340Curve) IsNotIdentity(p *Point) bool {
+	return bc.IsOnCurve(p.X, p.Y)
+}
+
+// SerializedPointLength returns the byte length of a serialized curve point.
+func (b *Bip340Curve) SerializedPointLength() int {
+	// From the Marshal() function of secp256k1 go-ethereum implementation:
+	// 	 byteLen := (BitCurve.BitSize + 7) >> 3
+	//   ret := make([]byte, 1+2*byteLen)
+	return 65
+}
+
+// SerializePoint serializes the provided elliptic curve point to bytes.
+// The slice length is equal to SerializedPointLength().
+func (b *Bip340Curve) SerializePoint(p *Point) []byte {
+	// Note that secp256k1 implementation uses a fixed length of
+	// (BitCurve.BitSize + 7) >> 3
+	return b.Marshal(p.X, p.Y)
+}
+
+// DeserializePoint deserializes byte slice to an elliptic curve point. The
+// byte slice length must be equal to SerializedPointLength(). Otherwise,
+// the function returns nil.
+func (b *Bip340Curve) DeserializePoint(bytes []byte) *Point {
+
+	// TODO: validate if point is on the curve
+
+	x, y := b.Unmarshal(bytes)
+	if x == nil || y == nil {
+		return nil
+	}
+
+	return &Point{x, y}
+}
+
 // H1 is the implementation of H1(m) function from [FROST].
 func (b *Bip340Ciphersuite) H1(m []byte) *big.Int {
 	// From [FROST], we know the tag should be DST = contextString || "rho".
@@ -68,7 +105,7 @@ func (b *Bip340Ciphersuite) H3(m []byte, ms ...[]byte) *big.Int {
 }
 
 // H4 is the implementation of H4(m) function from [FROST].
-func (b *Bip340Ciphersuite) H4(m []byte, ms ...[]byte) []byte {
+func (b *Bip340Ciphersuite) H4(m []byte) []byte {
 	// From [FROST], we know the tag should be DST = contextString || "msg".
 	dst := concat(b.contextString(), []byte("msg"))
 	hash := b.hash(dst, m)
@@ -76,7 +113,7 @@ func (b *Bip340Ciphersuite) H4(m []byte, ms ...[]byte) []byte {
 }
 
 // H5 is the implementation of H5(m) function from [FROST].
-func (b *Bip340Ciphersuite) H5(m []byte, ms ...[]byte) []byte {
+func (b *Bip340Ciphersuite) H5(m []byte) []byte {
 	// From [FROST], we know the tag should be DST = contextString || "com".
 	dst := concat(b.contextString(), []byte("com"))
 	hash := b.hash(dst, m)

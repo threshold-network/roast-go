@@ -27,6 +27,19 @@ func AssertBigIntsEqual(t *testing.T, description string, expected *big.Int, act
 	}
 }
 
+// AssertIntsEqual checks if two integers are equal. If not, it reports a test
+// failure.
+func AssertIntsEqual(t *testing.T, description string, expected int, actual int) {
+	if expected != actual {
+		t.Errorf(
+			"unexpected %s\nexpected: %v\nactual:   %v\n",
+			description,
+			expected,
+			actual,
+		)
+	}
+}
+
 // AssertBytesEqual checks if the two bytes array are equal. If not, it reports
 // a test failure.
 func AssertBytesEqual(t *testing.T, expectedBytes []byte, actualBytes []byte) {
@@ -34,6 +47,19 @@ func AssertBytesEqual(t *testing.T, expectedBytes []byte, actualBytes []byte) {
 
 	if err != nil {
 		t.Error(err)
+	}
+}
+
+// AssertStringsEqual checks if two strings are equal. If not, it reports a test
+// failure.
+func AssertStringsEqual(t *testing.T, description string, expected string, actual string) {
+	if expected != actual {
+		t.Errorf(
+			"unexpected %s\nexpected: %s\nactual:   %s\n",
+			description,
+			expected,
+			actual,
+		)
 	}
 }
 
