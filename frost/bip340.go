@@ -64,6 +64,9 @@ func (b *Bip340Curve) SerializePoint(p *Point) []byte {
 // byte slice length must be equal to SerializedPointLength(). Otherwise,
 // the function returns nil.
 func (b *Bip340Curve) DeserializePoint(bytes []byte) *Point {
+
+	// TODO: validate if point is on the curve
+
 	x, y := b.Unmarshal(bytes)
 	if x == nil || y == nil {
 		return nil
