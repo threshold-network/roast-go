@@ -102,7 +102,7 @@ func (b *Bip340Ciphersuite) H3(m []byte, ms ...[]byte) *big.Int {
 }
 
 // H4 is the implementation of H4(m) function from [FROST].
-func (b *Bip340Ciphersuite) H4(m []byte, ms ...[]byte) []byte {
+func (b *Bip340Ciphersuite) H4(m []byte) []byte {
 	// From [FROST], we know the tag should be DST = contextString || "msg".
 	dst := concat(b.contextString(), []byte("msg"))
 	hash := b.hash(dst, m)
@@ -110,7 +110,7 @@ func (b *Bip340Ciphersuite) H4(m []byte, ms ...[]byte) []byte {
 }
 
 // H5 is the implementation of H5(m) function from [FROST].
-func (b *Bip340Ciphersuite) H5(m []byte, ms ...[]byte) []byte {
+func (b *Bip340Ciphersuite) H5(m []byte) []byte {
 	// From [FROST], we know the tag should be DST = contextString || "com".
 	dst := concat(b.contextString(), []byte("com"))
 	hash := b.hash(dst, m)
