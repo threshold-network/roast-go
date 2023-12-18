@@ -28,6 +28,8 @@ type NonceCommitment struct {
 	bindingNonceCommitment *Point
 }
 
+// Round1 implements the Round One - Commitment phase from [FROST], section
+// 5.1.  Round One - Commitment.
 func (s *Signer) Round1() (*Nonce, *NonceCommitment, error) {
 	//	From [FROST]:
 	//
@@ -86,10 +88,12 @@ func (s *Signer) generateNonce(secret []byte) (*big.Int, error) {
 	return s.ciphersuite.H3(b, secret), nil
 }
 
-// TODO: check if nonce commitment is a valid point on the curve
-// TODO: check if it is not an identity element
-// TODO: check if the commitment list is sorted
-func (s *Signer) encodeGroupCommitment(commitments []NonceCommitment) []byte {
+// encodeGroupCommitment implements def encode_group_commitment_list(commitment_list)
+// function from [FROST], as defined in section 4.3.  List Operations.
+//
+// The function calling encodeGroupCommitment must ensure a valid number of
+// commitments have been received.
+func (s *Signer) encodeGroupCommitment(commitments []*NonceCommitment) ([]byte, []error) {
 	// From [FROST]:
 	//
 	// 4.3.  List Operations
@@ -110,6 +114,15 @@ func (s *Signer) encodeGroupCommitment(commitments []NonceCommitment) []byte {
 	//   Outputs:
 	//     - encoded_group_commitment, the serialized representation of
 	//       commitment_list, a byte string.
+	//
+	//   def encode_group_commitment_list(commitment_list):
+
+	// perform validations early to extract complexity out of the loop
+	// constructing encoded_group_commitment
+	validationErrors := s.validateGroupCommitment(commitments)
+	if len(validationErrors) != 0 {
+		return nil, validationErrors
+	}
 
 	curve := s.ciphersuite.Curve()
 	ecPointLength := curve.SerializedPointLength()
@@ -137,5 +150,76 @@ func (s *Signer) encodeGroupCommitment(commitments []NonceCommitment) []byte {
 	}
 
 	// return encoded_group_commitment
-	return b
+	return b, nil
+}
+
+// validateGroupCommitment is a helper function used internally by
+// encodeGroupCommitment to validate the group commitments. Two validations are
+// done:
+// - None of the commitments is the identity element of the curve.
+// - The list of commitments is sorted in ascending order by signer identifier.
+func (s *Signer) validateGroupCommitment(commitments []*NonceCommitment) []error {
+	// From [FROST]:
+	//
+	// 3.1 Prime-Order Group
+	//
+	//   (...)
+	//
+	//   SerializeElement(A): Maps an Element A to a canonical byte array
+	//   buf of fixed length Ne.  This function raises an error if A is the
+	//   identity element of the group.
+	//
+	// 4.3.  List Operations
+	//
+	//   (...)
+	//
+	//   commitment_list = [(i, hiding_nonce_commitment_i,
+	//	 binding_nonce_commitment_i), ...], a list of commitments issued by
+	//	 each participant, where each element in the list indicates a
+	//	 NonZeroScalar identifier i and two commitment Element values
+	//	 (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
+	//	 MUST be sorted in ascending order by identifier.
+	var errors []error
+
+	curve := s.ciphersuite.Curve()
+
+	// we index from 1 so this number will always be lower
+	lastSignerIndex := uint64(0)
+
+	for i, c := range commitments {
+		if c.signerIndex <= lastSignerIndex {
+			errors = append(
+				errors, fmt.Errorf(
+					"commitments not sorted in ascending order: "+
+						"commitments[%v].signerIndex=%v, commitments[%v].signerIndex=%v",
+					i-1,
+					lastSignerIndex,
+					i,
+					c.signerIndex,
+				),
+			)
+		}
+
+		lastSignerIndex = c.signerIndex
+
+		if !curve.IsNotIdentity(c.bindingNonceCommitment) {
+			errors = append(errors, fmt.Errorf(
+				"binding nonce commitment from signer [%v] is not a valid "+
+					"non-identity point on the curve: [%s]",
+				c.signerIndex,
+				c.bindingNonceCommitment,
+			))
+		}
+
+		if !curve.IsNotIdentity(c.hidingNonceCommitment) {
+			errors = append(errors, fmt.Errorf(
+				"hiding nonce commitment from signer [%v] is not a valid "+
+					"non-identity point on the curve: [%s]",
+				c.signerIndex,
+				c.hidingNonceCommitment,
+			))
+		}
+	}
+
+	return errors
 }

@@ -50,6 +50,19 @@ func AssertBytesEqual(t *testing.T, expectedBytes []byte, actualBytes []byte) {
 	}
 }
 
+// AssertStringsEqual checks if two strings are equal. If not, it reports a test
+// failure.
+func AssertStringsEqual(t *testing.T, description string, expected string, actual string) {
+	if expected != actual {
+		t.Errorf(
+			"unexpected %s\nexpected: %s\nactual:   %s\n",
+			description,
+			expected,
+			actual,
+		)
+	}
+}
+
 func testBytesEqual(expectedBytes []byte, actualBytes []byte) error {
 	minLen := len(expectedBytes)
 	diffCount := 0

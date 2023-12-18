@@ -1,6 +1,9 @@
 package frost
 
-import "math/big"
+import (
+	"fmt"
+	"math/big"
+)
 
 // Ciphersuite interface abstracts out the particular ciphersuite implementation
 // used for the [FROST] protocol execution. This is a strategy design pattern
@@ -58,4 +61,10 @@ type Curve interface {
 type Point struct {
 	X *big.Int // the X coordinate of the point
 	Y *big.Int // the Y coordinate of the point
+}
+
+// String transforms Point structure into a string so that it can be used
+// in logging.
+func (p *Point) String() string {
+	return fmt.Sprintf("Point[X=0x%v, Y=0x%v]", p.X.Text(16), p.Y.Text(16))
 }
