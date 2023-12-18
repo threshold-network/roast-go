@@ -33,6 +33,10 @@ type Curve interface {
 	// EcBaseMul returns k*G, where G is the base point of the group.
 	EcBaseMul(*big.Int) *Point
 
+	// IsNotIdentity validates if the point lies on the curve and is not an
+	// identity element.
+	IsNotIdentity(*Point) bool
+
 	// SerializedPointLength returns the byte length of a serialized curve point.
 	// The value is specific to the implementation. It is expected that the
 	// SerializePoint function always return a slice of this length and the

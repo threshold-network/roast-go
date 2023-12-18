@@ -38,6 +38,12 @@ func (bc *Bip340Curve) EcBaseMul(k *big.Int) *Point {
 	return &Point{gs_x, gs_y}
 }
 
+// IsNotIdentity validates if the point lies on the curve and is not an identity
+// element.
+func (bc *Bip340Curve) IsNotIdentity(p *Point) bool {
+	return bc.IsOnCurve(p.X, p.Y)
+}
+
 // SerializedPointLength returns the byte length of a serialized curve point.
 func (b *Bip340Curve) SerializedPointLength() int {
 	// From the Marshal() function of secp256k1 go-ethereum implementation:
