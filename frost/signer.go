@@ -225,6 +225,8 @@ func (s *Signer) computeBindingFactors(
 	// binding_factor_list = []
 	bindingFactors := make(map[uint64]*big.Int, len(commitments))
 
+	// for (identifier, hiding_nonce_commitment,
+	//      binding_nonce_commitment) in commitment_list:
 	for _, commitment := range commitments {
 		// rho_input = rho_input_prefix || G.SerializeScalar(identifier)
 		rhoInput := make([]byte, len(rhoInputPrefix)+8)
