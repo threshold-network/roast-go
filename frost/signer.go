@@ -14,6 +14,7 @@ type Signer struct {
 
 	signerIndex    uint64   // i in [FROST]
 	secretKeyShare *big.Int // sk_i in [FROST]
+	publicKey      *Point   // group_public_key in [FROST]
 }
 
 // Nonce is a message produced in Round One of [FROST].
@@ -27,6 +28,13 @@ type NonceCommitment struct {
 	signerIndex            uint64
 	hidingNonceCommitment  *Point
 	bindingNonceCommitment *Point
+}
+
+// BindingFactor is a helper structure produced by computeBindingFactors
+// function in the Round Two of [FROST].
+type BindingFactor struct {
+	signerIndex   uint64
+	bindingFactor *big.Int
 }
 
 // Round1 implements the Round One - Commitment phase from [FROST], section
@@ -169,15 +177,79 @@ func (s *Signer) validateGroupCommitments(commitments []*NonceCommitment) []erro
 	return errors
 }
 
+// computeBindingFactors implements def compute_binding_factors(group_public_key,
+// commitment_list, msg) function from [FROST], as defined in section 4.4. Binding
+// Factors Computation.
+//
+// The function calling computeBindingFactors must ensure a valid number of
+// commitments have been received and call validateGroupCommitment to validate
+// the received commitments.
+func (s *Signer) computeBindingFactors(
+	commitments []*NonceCommitment,
+	message []byte,
+) []BindingFactor {
+	// From [FROST]:
+	//
+	// 4.4.  Binding Factors Computation
+	//
+	//   This section describes the subroutine for computing binding factors
+	//   based on the participant commitment list, message to be signed, and
+	//   group public key.
+	//
+	//   Inputs:
+	//     - group_public_key, the public key corresponding to the group signing
+	//       key, an Element.
+	//     - commitment_list = [(i, hiding_nonce_commitment_i,
+	//       binding_nonce_commitment_i), ...], a list of commitments issued by
+	//       each participant, where each element in the list indicates a
+	//       NonZeroScalar identifier i and two commitment Element values
+	//       (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
+	//       MUST be sorted in ascending order by identifier.
+	//     - msg, the message to be signed.
+	//
+	//   Outputs:
+	//     - binding_factor_list, a list of (NonZeroScalar, Scalar) tuples
+	//       representing the binding factors.
+
+	// group_public_key_enc = G.SerializeElement(group_public_key)
+	curve := s.ciphersuite.Curve()
+	groupPublicKeyEncoded := curve.SerializePoint(s.publicKey)
+
+	// msg_hash = H4(msg)
+	msgHash := s.ciphersuite.H4(message)
+
+	// encoded_commitment_hash =
+	//    H5(encode_group_commitment_list(commitment_list))
+	encodedCommitHash := s.ciphersuite.H5(s.encodeGroupCommitment(commitments))
+
+	// rho_input_prefix = group_public_key_enc || msg_hash || encoded_commitment_hash
+	rhoInputPrefix := concat(groupPublicKeyEncoded, msgHash, encodedCommitHash)
+
+	// binding_factor_list = []
+	bindingFactors := make([]BindingFactor, len(commitments))
+
+	for i, commitment := range commitments {
+		// rho_input = rho_input_prefix || G.SerializeScalar(identifier)
+		rhoInput := make([]byte, len(rhoInputPrefix)+8)
+		copy(rhoInput, rhoInputPrefix)
+		binary.BigEndian.AppendUint64(rhoInput, commitment.signerIndex)
+		// binding_factor = H1(rho_input)
+		bindingFactor := s.ciphersuite.H1(rhoInput)
+		// binding_factor_list.append((identifier, binding_factor))
+		bindingFactors[i] = BindingFactor{commitment.signerIndex, bindingFactor}
+	}
+
+	// return binding_factor_list
+	return bindingFactors
+}
+
 // encodeGroupCommitment implements def encode_group_commitment_list(commitment_list)
 // function from [FROST], as defined in section 4.3.  List Operations.
 //
 // The function calling encodeGroupCommitment must ensure a valid number of
 // commitments have been received and call validateGroupCommitment to validate
 // the received commitments.
-func (s *Signer) encodeGroupCommitment(
-	commitments []*NonceCommitment,
-) ([]byte, []error) {
+func (s *Signer) encodeGroupCommitment(commitments []*NonceCommitment) []byte {
 	// From [FROST]:
 	//
 	// 4.3.  List Operations
@@ -227,5 +299,5 @@ func (s *Signer) encodeGroupCommitment(
 	}
 
 	// return encoded_group_commitment
-	return b, nil
+	return b
 }
