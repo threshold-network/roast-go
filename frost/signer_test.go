@@ -12,13 +12,30 @@ import (
 var ciphersuite = NewBip340Ciphersuite()
 var groupSize = 100
 
-func TestValidateGroupCommitment(t *testing.T) {
+func TestRound2_ValidationError(t *testing.T) {
+	// just a basic test checking if Round2 calls validateGroupCommitments
+	signers := createSigners(t)
+	_, commitments := executeRound1(t, signers)
+	commitments[0].bindingNonceCommitment = &Point{big.NewInt(99), big.NewInt(88)}
+
+	signer := signers[1]
+
+	_, err := signer.Round2([]byte("dummy"), commitments)
+	if err == nil {
+		t.Fatalf("expected a non-nil error")
+	}
+	// assert if this is indeed a validation error
+	expectedError := "binding nonce commitment from signer [1] is not a valid non-identity point on the curve: [Point[X=0x63, Y=0x58]]"
+	testutils.AssertStringsEqual(t, "validation error", expectedError, err.Error())
+}
+
+func TestValidateGroupCommitments(t *testing.T) {
 	signers := createSigners(t)
 	_, commitments := executeRound1(t, signers)
 
 	signer := signers[0]
 
-	validationErrors := signer.validateGroupCommitment(commitments)
+	validationErrors := signer.validateGroupCommitments(commitments)
 	testutils.AssertIntsEqual(t, "number of validation errors", 0, len(validationErrors))
 }
 
@@ -40,7 +57,7 @@ func TestValidateGroupCommitments_Errors(t *testing.T) {
 
 	signer := signers[0]
 
-	validationErrors := signer.validateGroupCommitment(commitments)
+	validationErrors := signer.validateGroupCommitments(commitments)
 
 	expectedError1 := "commitments not sorted in ascending order: commitments[31].signerIndex=51, commitments[32].signerIndex=33"
 	expectedError2 := "commitments not sorted in ascending order: commitments[49].signerIndex=50, commitments[50].signerIndex=32"
@@ -52,19 +69,6 @@ func TestValidateGroupCommitments_Errors(t *testing.T) {
 	testutils.AssertStringsEqual(t, "validation error #2", expectedError2, validationErrors[1].Error())
 	testutils.AssertStringsEqual(t, "validation error #3", expectedError3, validationErrors[2].Error())
 	testutils.AssertStringsEqual(t, "validation error #4", expectedError4, validationErrors[3].Error())
-}
-
-func TestEncodeGroupCommitments_ValidationError(t *testing.T) {
-	// just a basic test checking if encodeGroupCommitment calls the validation
-
-	signers := createSigners(t)
-	_, commitments := executeRound1(t, signers)
-	commitments[0].bindingNonceCommitment = &Point{big.NewInt(99), big.NewInt(88)}
-
-	signer := signers[1]
-
-	_, errs := signer.encodeGroupCommitment(commitments)
-	testutils.AssertIntsEqual(t, "number of validation errors", 1, len(errs))
 }
 
 func TestEncodeGroupCommitments(t *testing.T) {
