@@ -61,18 +61,22 @@ func (b *Bip340Curve) SerializePoint(p *Point) []byte {
 }
 
 // DeserializePoint deserializes byte slice to an elliptic curve point. The
-// byte slice length must be equal to SerializedPointLength(). Otherwise,
+// byte slice length must be equal to SerializedPointLength(). The deserialized
+// point must be a valid, non-identity point lying on the curve. Otherwise,
 // the function returns nil.
 func (b *Bip340Curve) DeserializePoint(bytes []byte) *Point {
-
-	// TODO: validate if point is on the curve
-
 	x, y := b.Unmarshal(bytes)
 	if x == nil || y == nil {
 		return nil
 	}
 
-	return &Point{x, y}
+	point := &Point{x, y}
+
+	if !b.IsNotIdentity(point) {
+		return nil
+	}
+
+	return point
 }
 
 // H1 is the implementation of H1(m) function from [FROST].

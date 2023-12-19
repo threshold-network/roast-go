@@ -57,6 +57,9 @@ func TestBip340CurveDeserialize(t *testing.T) {
 		"one more than expected": {
 			input: append(serialized, 0x1),
 		},
+		"not on the curve": {
+			input: curve.SerializePoint(&Point{big.NewInt(1), big.NewInt(2)}),
+		},
 	}
 
 	for testName, test := range tests {
