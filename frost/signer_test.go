@@ -113,10 +113,7 @@ func TestEncodeGroupCommitments(t *testing.T) {
 	}
 
 	signer := createSigners(t)[0]
-	encoded, errs := signer.encodeGroupCommitment(commitments)
-	if len(errs) != 0 {
-		t.Fatalf("unexpected validation errors: [%v]", errs)
-	}
+	encoded := signer.encodeGroupCommitment(commitments)
 
 	testutils.AssertStringsEqual(
 		t,

@@ -36,6 +36,16 @@ type Curve interface {
 	// EcBaseMul returns k*G, where G is the base point of the group.
 	EcBaseMul(*big.Int) *Point
 
+	// EcMul returns k*P where P is the point provided as a parameter and k is
+	// as integer.
+	EcMul(*Point, *big.Int) *Point
+
+	// EcAdd returns the sum of two elliptic curve points.
+	EcAdd(*Point, *Point) *Point
+
+	// Identity returns elliptic curve identity element.
+	Identity() *Point
+
 	// IsNotIdentity validates if the point lies on the curve and is not an
 	// identity element.
 	IsNotIdentity(*Point) bool

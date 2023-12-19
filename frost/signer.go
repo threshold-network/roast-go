@@ -30,12 +30,9 @@ type NonceCommitment struct {
 	bindingNonceCommitment *Point
 }
 
-// BindingFactor is a helper structure produced by computeBindingFactors
-// function in the Round Two of [FROST].
-type BindingFactor struct {
-	signerIndex   uint64
-	bindingFactor *big.Int
-}
+// bindingFactors is a helper structure produced by computeBindingFactors
+// function in the Round Two of [FROST] and used across round two functions.
+type bindingFactors map[uint64]*big.Int
 
 // Round1 implements the Round One - Commitment phase from [FROST], section
 // 5.1.  Round One - Commitment.
@@ -187,7 +184,7 @@ func (s *Signer) validateGroupCommitments(commitments []*NonceCommitment) []erro
 func (s *Signer) computeBindingFactors(
 	commitments []*NonceCommitment,
 	message []byte,
-) []BindingFactor {
+) bindingFactors {
 	// From [FROST]:
 	//
 	// 4.4.  Binding Factors Computation
@@ -226,9 +223,9 @@ func (s *Signer) computeBindingFactors(
 	rhoInputPrefix := concat(groupPublicKeyEncoded, msgHash, encodedCommitHash)
 
 	// binding_factor_list = []
-	bindingFactors := make([]BindingFactor, len(commitments))
+	bindingFactors := make(map[uint64]*big.Int, len(commitments))
 
-	for i, commitment := range commitments {
+	for _, commitment := range commitments {
 		// rho_input = rho_input_prefix || G.SerializeScalar(identifier)
 		rhoInput := make([]byte, len(rhoInputPrefix)+8)
 		copy(rhoInput, rhoInputPrefix)
@@ -236,11 +233,75 @@ func (s *Signer) computeBindingFactors(
 		// binding_factor = H1(rho_input)
 		bindingFactor := s.ciphersuite.H1(rhoInput)
 		// binding_factor_list.append((identifier, binding_factor))
-		bindingFactors[i] = BindingFactor{commitment.signerIndex, bindingFactor}
+		bindingFactors[commitment.signerIndex] = bindingFactor
 	}
 
 	// return binding_factor_list
 	return bindingFactors
+}
+
+// computeGroupCommitment implements def compute_group_commitment(commitment_list,
+// binding_factor_list) function from [FROST], as defined in section 4.5. Group
+// Commitment Computation.
+//
+// The function calling computeGroupCommitment must ensure a valid number of
+// commitments have been received and call validateGroupCommitment to validate
+// the received commitments.
+func (s *Signer) computeGroupCommitment(
+	commitments []*NonceCommitment,
+	bindingFactors bindingFactors,
+) *Point {
+	// From [FROST]:
+	//
+	// 4.5.  Group Commitment Computation
+	//
+	//   This section describes the subroutine for creating the group
+	//   commitment from a commitment list.
+	//
+	//   Inputs:
+	//     - commitment_list = [(i, hiding_nonce_commitment_i,
+	//       binding_nonce_commitment_i), ...], a list of commitments issued by
+	//       each participant, where each element in the list indicates a
+	//       NonZeroScalar identifier i and two commitment Element values
+	//       (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
+	//       MUST be sorted in ascending order by identifier.
+	//     - binding_factor_list = [(i, binding_factor), ...],
+	//       a list of (NonZeroScalar, Scalar) tuples representing the binding
+	//       factor Scalar for the given identifier.
+	//
+	//   Outputs:
+	//     - group_commitment, an Element.
+
+	curve := s.ciphersuite.Curve()
+
+	// group_commitment = G.Identity()
+	groupCommitment := curve.Identity()
+
+	// for (identifier, hiding_nonce_commitment,
+	//     binding_nonce_commitment) in commitment_list:
+	for _, commitment := range commitments {
+		// binding_factor = binding_factor_for_participant(
+		//     binding_factor_list, identifier)
+		bindingFactor := bindingFactors[commitment.signerIndex]
+		// binding_nonce = G.ScalarMult(
+		//     binding_nonce_commitment,
+		//     binding_factor)
+		bindingNonce := curve.EcMul(
+			commitment.bindingNonceCommitment,
+			bindingFactor,
+		)
+		// group_commitment = (
+		//     group_commitment +
+		//     hiding_nonce_commitment +
+		//     binding_nonce)
+		groupCommitment = curve.EcAdd(
+			groupCommitment,
+			curve.EcAdd(commitment.hidingNonceCommitment, bindingNonce),
+		)
+	}
+
+	// return group_commitment
+	return groupCommitment
 }
 
 // encodeGroupCommitment implements def encode_group_commitment_list(commitment_list)
