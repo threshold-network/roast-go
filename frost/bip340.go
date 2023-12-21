@@ -60,7 +60,7 @@ func (bc *Bip340Curve) Identity() *Point {
 	return &Point{big.NewInt(0), big.NewInt(0)}
 }
 
-// Order returns the order of the elliptic curve.
+// Order returns the order of the group produced by the elliptic curve generator.
 func (bc *Bip340Curve) Order() *big.Int {
 	return new(big.Int).Set(bc.N)
 }
