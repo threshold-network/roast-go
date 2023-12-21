@@ -8,6 +8,59 @@ import (
 	"threshold.network/roast/internal/testutils"
 )
 
+func TestBip340CurveEcBaseMul(t *testing.T) {
+	curve := NewBip340Ciphersuite().Curve()
+	point := curve.EcBaseMul(big.NewInt(10))
+
+	expectedX := "72488970228380509287422715226575535698893157273063074627791787432852706183111"
+	expectedY := "62070622898698443831883535403436258712770888294397026493185421712108624767191"
+
+	testutils.AssertStringsEqual(t, "X coordinate", expectedX, point.X.String())
+	testutils.AssertStringsEqual(t, "Y coordinate", expectedY, point.Y.String())
+}
+
+func TestBip340CurveEcMul(t *testing.T) {
+	curve := NewBip340Ciphersuite().Curve()
+	point := curve.EcBaseMul(big.NewInt(10))
+	result := curve.EcMul(point, big.NewInt(5))
+
+	expectedX := "18752372355191540835222161239240920883340654532661984440989362140194381601434"
+	expectedY := "88478450163343634110113046083156231725329016889379853417393465962619872936244"
+
+	testutils.AssertStringsEqual(t, "X coordinate", expectedX, result.X.String())
+	testutils.AssertStringsEqual(t, "Y coordinate", expectedY, result.Y.String())
+}
+
+func TestBip340CurveEcAdd(t *testing.T) {
+	curve := NewBip340Ciphersuite().Curve()
+	point1 := curve.EcBaseMul(big.NewInt(10))
+	point2 := curve.EcBaseMul(big.NewInt(20))
+	result := curve.EcAdd(point1, point2)
+
+	expectedX := "49378132684229722274313556995573891527709373183446262831552359577455015004672"
+	expectedY := "78123232289538034746933569305416412888858560602643272431489024958214987548923"
+
+	testutils.AssertStringsEqual(t, "X coordinate", expectedX, result.X.String())
+	testutils.AssertStringsEqual(t, "Y coordinate", expectedY, result.Y.String())
+}
+
+func TestBip340CurveEcAdd_Identity(t *testing.T) {
+	curve := NewBip340Ciphersuite().Curve()
+	point := curve.EcBaseMul(big.NewInt(10))
+	identity := curve.Identity()
+
+	result1 := curve.EcAdd(point, identity)
+	result2 := curve.EcAdd(identity, point)
+
+	expectedX := "72488970228380509287422715226575535698893157273063074627791787432852706183111"
+	expectedY := "62070622898698443831883535403436258712770888294397026493185421712108624767191"
+
+	testutils.AssertStringsEqual(t, "X coordinate", expectedX, result1.X.String())
+	testutils.AssertStringsEqual(t, "Y coordinate", expectedY, result1.Y.String())
+	testutils.AssertStringsEqual(t, "X coordinate", expectedX, result2.X.String())
+	testutils.AssertStringsEqual(t, "Y coordinate", expectedY, result2.Y.String())
+}
+
 func TestBip340CurveSerializedPointLength(t *testing.T) {
 	curve := NewBip340Ciphersuite().Curve()
 
@@ -59,6 +112,9 @@ func TestBip340CurveDeserialize(t *testing.T) {
 		},
 		"not on the curve": {
 			input: curve.SerializePoint(&Point{big.NewInt(1), big.NewInt(2)}),
+		},
+		"identity element": {
+			input: curve.SerializePoint(curve.Identity()),
 		},
 	}
 

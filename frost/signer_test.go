@@ -72,7 +72,6 @@ func TestValidateGroupCommitments_Errors(t *testing.T) {
 }
 
 func TestEncodeGroupCommitments(t *testing.T) {
-
 	hidingNonceCommitments := [][]string{
 		{"d01115d548e7561b15c38f004d734633687cf4419620095bc5b0f47070afe85a", "a9f34ffdc815e0d7a8b64537e17bd81579238c5dd9a86d526b051b13f4062327"}, // G*12
 		{"f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8", "ab0902e8d880a89758212eb65cdaf473a1a06da521fa91f29b5cb52db03ed81"},  // G*13
