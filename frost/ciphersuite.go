@@ -46,6 +46,9 @@ type Curve interface {
 	// Identity returns elliptic curve identity element.
 	Identity() *Point
 
+	// Order returns the order of the elliptic curve.
+	Order() *big.Int
+
 	// IsPointOnCurve validates if the point lies on the curve and is not an
 	// identity element.
 	//
