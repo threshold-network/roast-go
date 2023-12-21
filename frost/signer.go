@@ -106,7 +106,7 @@ func (s *Signer) Round2(message []byte, commitments []*NonceCommitment) (*big.In
 // validateGroupCommitments is a helper function used internally by
 // encodeGroupCommitment to validate the group commitments. Two validations are
 // done:
-// - None of the commitments is the identity element of the curve.
+// - None of the commitments is a point not lying on the curve.
 // - The list of commitments is sorted in ascending order by signer identifier.
 func (s *Signer) validateGroupCommitments(commitments []*NonceCommitment) []error {
 	// From [FROST]:
@@ -152,7 +152,7 @@ func (s *Signer) validateGroupCommitments(commitments []*NonceCommitment) []erro
 
 		lastSignerIndex = c.signerIndex
 
-		if !curve.IsNotIdentity(c.bindingNonceCommitment) {
+		if !curve.IsPointOnCurve(c.bindingNonceCommitment) {
 			errors = append(errors, fmt.Errorf(
 				"binding nonce commitment from signer [%v] is not a valid "+
 					"non-identity point on the curve: [%s]",
@@ -161,7 +161,7 @@ func (s *Signer) validateGroupCommitments(commitments []*NonceCommitment) []erro
 			))
 		}
 
-		if !curve.IsNotIdentity(c.hidingNonceCommitment) {
+		if !curve.IsPointOnCurve(c.hidingNonceCommitment) {
 			errors = append(errors, fmt.Errorf(
 				"hiding nonce commitment from signer [%v] is not a valid "+
 					"non-identity point on the curve: [%s]",

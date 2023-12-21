@@ -46,9 +46,18 @@ type Curve interface {
 	// Identity returns elliptic curve identity element.
 	Identity() *Point
 
-	// IsNotIdentity validates if the point lies on the curve and is not an
+	// IsPointOnCurve validates if the point lies on the curve and is not an
 	// identity element.
-	IsNotIdentity(*Point) bool
+	//
+	// [FROST] requires to validate if we are dealing with a valid element of
+	// the group and that element is a non-identity element.
+	// For elliptic curve cryptography, we do not have an identity element but
+	// we take the point at infinity as an identity element. The point at
+	// infinity is an extra point O and it is not on the curve. In our case it
+	// is enough to validate if the point is on the curve. This validation will
+	// satisfy [FROST] requirements of a valid, non-identity element of the
+	// group.
+	IsPointOnCurve(*Point) bool
 
 	// SerializedPointLength returns the byte length of a serialized curve point.
 	// The value is specific to the implementation. It is expected that the

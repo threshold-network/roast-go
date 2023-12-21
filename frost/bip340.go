@@ -60,9 +60,9 @@ func (bc *Bip340Curve) Identity() *Point {
 	return &Point{big.NewInt(0), big.NewInt(0)}
 }
 
-// IsNotIdentity validates if the point lies on the curve and is not an identity
-// element.
-func (bc *Bip340Curve) IsNotIdentity(p *Point) bool {
+// IsPointOnCurve validates if the point lies on the curve and is not an
+// identity element.
+func (bc *Bip340Curve) IsPointOnCurve(p *Point) bool {
 	return bc.IsOnCurve(p.X, p.Y)
 }
 
@@ -94,7 +94,7 @@ func (b *Bip340Curve) DeserializePoint(bytes []byte) *Point {
 
 	point := &Point{x, y}
 
-	if !b.IsNotIdentity(point) {
+	if !b.IsPointOnCurve(point) {
 		return nil
 	}
 
