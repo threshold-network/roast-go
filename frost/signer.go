@@ -448,3 +448,40 @@ func (s *Signer) deriveInterpolatingValue(xi uint64, L []uint64) (*big.Int, erro
 	// return value
 	return res, nil
 }
+
+// computeChallenge implements def compute_group_commitment(commitment_list,
+// binding_factor_list) from [FROST] as defined in section 4.6. Signature
+// Challenge Computation.
+func (s *Signer) computeChallenge(
+	groupCommitment *Point,
+	message []byte,
+) *big.Int {
+
+	// From [FROST]:
+	//
+	// 4.6.  Signature Challenge Computation
+	//
+	//   This section describes the subroutine for creating the per-message
+	//   challenge.
+	//
+	//   Inputs:
+	//     - group_commitment, the group commitment, an Element.
+	//     - group_public_key, the public key corresponding to the group signing
+	//       key, an Element.
+	//     - msg, the message to be signed, a byte string.
+	//
+	//   Outputs:
+	//     - challenge, a Scalar.
+	//
+	// def compute_group_commitment(commitment_list, binding_factor_list)
+
+	curve := s.ciphersuite.Curve()
+	// group_comm_enc = G.SerializeElement(group_commitment)
+	groupCommitmentEncoded := curve.SerializePoint(groupCommitment)
+	// group_public_key_enc = G.SerializeElement(group_public_key)
+	publicKeyEncoded := curve.SerializePoint(s.publicKey)
+	// challenge_input = group_comm_enc || group_public_key_enc || msg
+	// challenge = H2(challenge_input)
+	// return challenge
+	return s.ciphersuite.H2(groupCommitmentEncoded, publicKeyEncoded, message)
+}
