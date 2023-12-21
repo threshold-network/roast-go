@@ -33,14 +33,36 @@ type Bip340Curve struct {
 
 // EcBaseMul returns k*G, where G is the base point of the group.
 func (bc *Bip340Curve) EcBaseMul(k *big.Int) *Point {
-	sp := new(big.Int).Mod(k, bc.N)
-	gs_x, gs_y := bc.ScalarBaseMult(sp.Bytes())
-	return &Point{gs_x, gs_y}
+	kmod := new(big.Int).Mod(k, bc.N)
+	x, y := bc.ScalarBaseMult(kmod.Bytes())
+	return &Point{x, y}
 }
 
-// IsNotIdentity validates if the point lies on the curve and is not an identity
-// element.
-func (bc *Bip340Curve) IsNotIdentity(p *Point) bool {
+// EcMul returns k*P where P is the point provided as a parameter and k is
+// as integer.
+func (bc *Bip340Curve) EcMul(p *Point, k *big.Int) *Point {
+	kmod := new(big.Int).Mod(k, bc.N)
+	x, y := bc.ScalarMult(p.X, p.Y, kmod.Bytes())
+	return &Point{x, y}
+}
+
+// EcAdd returns the sum of two elliptic curve points.
+func (bc *Bip340Curve) EcAdd(a *Point, b *Point) *Point {
+	x, y := bc.Add(a.X, a.Y, b.X, b.Y)
+	return &Point{x, y}
+}
+
+// Identity returns elliptic curve identity element.
+func (bc *Bip340Curve) Identity() *Point {
+	// For elliptic curves, the identity is the point at infinity.
+	// For secp256k1 we pick a conventional representation as (0,0) in cartesian
+	// coordinates. This is fine because 0,0 does not lie on the secp256k1 curve.
+	return &Point{big.NewInt(0), big.NewInt(0)}
+}
+
+// IsPointOnCurve validates if the point lies on the curve and is not an
+// identity element.
+func (bc *Bip340Curve) IsPointOnCurve(p *Point) bool {
 	return bc.IsOnCurve(p.X, p.Y)
 }
 
@@ -61,18 +83,22 @@ func (b *Bip340Curve) SerializePoint(p *Point) []byte {
 }
 
 // DeserializePoint deserializes byte slice to an elliptic curve point. The
-// byte slice length must be equal to SerializedPointLength(). Otherwise,
+// byte slice length must be equal to SerializedPointLength(). The deserialized
+// point must be a valid, non-identity point lying on the curve. Otherwise,
 // the function returns nil.
 func (b *Bip340Curve) DeserializePoint(bytes []byte) *Point {
-
-	// TODO: validate if point is on the curve
-
 	x, y := b.Unmarshal(bytes)
 	if x == nil || y == nil {
 		return nil
 	}
 
-	return &Point{x, y}
+	point := &Point{x, y}
+
+	if !b.IsPointOnCurve(point) {
+		return nil
+	}
+
+	return point
 }
 
 // H1 is the implementation of H1(m) function from [FROST].

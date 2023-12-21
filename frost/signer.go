@@ -3,6 +3,7 @@ package frost
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 )
@@ -13,6 +14,7 @@ type Signer struct {
 
 	signerIndex    uint64   // i in [FROST]
 	secretKeyShare *big.Int // sk_i in [FROST]
+	publicKey      *Point   // group_public_key in [FROST]
 }
 
 // Nonce is a message produced in Round One of [FROST].
@@ -27,6 +29,10 @@ type NonceCommitment struct {
 	hidingNonceCommitment  *Point
 	bindingNonceCommitment *Point
 }
+
+// bindingFactors is a helper structure produced by computeBindingFactors
+// function in the Round Two of [FROST] and used across round two functions.
+type bindingFactors map[uint64]*big.Int
 
 // Round1 implements the Round One - Commitment phase from [FROST], section
 // 5.1.  Round One - Commitment.
@@ -88,77 +94,21 @@ func (s *Signer) generateNonce(secret []byte) (*big.Int, error) {
 	return s.ciphersuite.H3(b, secret), nil
 }
 
-// encodeGroupCommitment implements def encode_group_commitment_list(commitment_list)
-// function from [FROST], as defined in section 4.3.  List Operations.
-//
-// The function calling encodeGroupCommitment must ensure a valid number of
-// commitments have been received.
-func (s *Signer) encodeGroupCommitment(commitments []*NonceCommitment) ([]byte, []error) {
-	// From [FROST]:
-	//
-	// 4.3.  List Operations
-	//
-	//   This section describes helper functions that work on lists of values
-	//   produced during the FROST protocol.  The following function encodes a
-	//   list of participant commitments into a byte string for use in the
-	//   FROST protocol.
-	//
-	//   Inputs:
-	//     - commitment_list = [(i, hiding_nonce_commitment_i,
-	//       binding_nonce_commitment_i), ...], a list of commitments issued by
-	//       each participant, where each element in the list indicates a
-	//       NonZeroScalar identifier i and two commitment Element values
-	//       (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
-	//       MUST be sorted in ascending order by identifier.
-	//
-	//   Outputs:
-	//     - encoded_group_commitment, the serialized representation of
-	//       commitment_list, a byte string.
-	//
-	//   def encode_group_commitment_list(commitment_list):
-
-	// perform validations early to extract complexity out of the loop
-	// constructing encoded_group_commitment
-	validationErrors := s.validateGroupCommitment(commitments)
+func (s *Signer) Round2(message []byte, commitments []*NonceCommitment) (*big.Int, error) {
+	validationErrors := s.validateGroupCommitments(commitments)
 	if len(validationErrors) != 0 {
-		return nil, validationErrors
+		return nil, errors.Join(validationErrors...)
 	}
 
-	curve := s.ciphersuite.Curve()
-	ecPointLength := curve.SerializedPointLength()
-
-	// preallocate the necessary space to avoid waste:
-	// 8 bytes for signerIndex (uint64)
-	// ecPointLength for hidingNonceCommitment
-	// ecPointLength for bindingNonceCommitment
-	b := make([]byte, 0, (8+2*ecPointLength)*len(commitments))
-
-	// encoded_group_commitment = nil
-	// for (identifier, hiding_nonce_commitment,
-	//      binding_nonce_commitment) in commitment_list:
-	for _, c := range commitments {
-		// encoded_commitment = (
-		//     G.SerializeScalar(identifier) ||
-		//     G.SerializeElement(hiding_nonce_commitment) ||
-		//     G.SerializeElement(binding_nonce_commitment))
-		// encoded_group_commitment = (
-		//     encoded_group_commitment ||
-		//     encoded_commitment)
-		b = binary.BigEndian.AppendUint64(b, c.signerIndex)
-		b = append(b, curve.SerializePoint(c.hidingNonceCommitment)...)
-		b = append(b, curve.SerializePoint(c.bindingNonceCommitment)...)
-	}
-
-	// return encoded_group_commitment
-	return b, nil
+	return nil, nil // TODO: return signature share
 }
 
-// validateGroupCommitment is a helper function used internally by
+// validateGroupCommitments is a helper function used internally by
 // encodeGroupCommitment to validate the group commitments. Two validations are
 // done:
-// - None of the commitments is the identity element of the curve.
+// - None of the commitments is a point not lying on the curve.
 // - The list of commitments is sorted in ascending order by signer identifier.
-func (s *Signer) validateGroupCommitment(commitments []*NonceCommitment) []error {
+func (s *Signer) validateGroupCommitments(commitments []*NonceCommitment) []error {
 	// From [FROST]:
 	//
 	// 3.1 Prime-Order Group
@@ -202,7 +152,7 @@ func (s *Signer) validateGroupCommitment(commitments []*NonceCommitment) []error
 
 		lastSignerIndex = c.signerIndex
 
-		if !curve.IsNotIdentity(c.bindingNonceCommitment) {
+		if !curve.IsPointOnCurve(c.bindingNonceCommitment) {
 			errors = append(errors, fmt.Errorf(
 				"binding nonce commitment from signer [%v] is not a valid "+
 					"non-identity point on the curve: [%s]",
@@ -211,7 +161,7 @@ func (s *Signer) validateGroupCommitment(commitments []*NonceCommitment) []error
 			))
 		}
 
-		if !curve.IsNotIdentity(c.hidingNonceCommitment) {
+		if !curve.IsPointOnCurve(c.hidingNonceCommitment) {
 			errors = append(errors, fmt.Errorf(
 				"hiding nonce commitment from signer [%v] is not a valid "+
 					"non-identity point on the curve: [%s]",
@@ -222,4 +172,195 @@ func (s *Signer) validateGroupCommitment(commitments []*NonceCommitment) []error
 	}
 
 	return errors
+}
+
+// computeBindingFactors implements def compute_binding_factors(group_public_key,
+// commitment_list, msg) function from [FROST], as defined in section 4.4. Binding
+// Factors Computation.
+//
+// The function calling computeBindingFactors must ensure a valid number of
+// commitments have been received and call validateGroupCommitment to validate
+// the received commitments.
+func (s *Signer) computeBindingFactors(
+	commitments []*NonceCommitment,
+	message []byte,
+) bindingFactors {
+	// From [FROST]:
+	//
+	// 4.4.  Binding Factors Computation
+	//
+	//   This section describes the subroutine for computing binding factors
+	//   based on the participant commitment list, message to be signed, and
+	//   group public key.
+	//
+	//   Inputs:
+	//     - group_public_key, the public key corresponding to the group signing
+	//       key, an Element.
+	//     - commitment_list = [(i, hiding_nonce_commitment_i,
+	//       binding_nonce_commitment_i), ...], a list of commitments issued by
+	//       each participant, where each element in the list indicates a
+	//       NonZeroScalar identifier i and two commitment Element values
+	//       (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
+	//       MUST be sorted in ascending order by identifier.
+	//     - msg, the message to be signed.
+	//
+	//   Outputs:
+	//     - binding_factor_list, a list of (NonZeroScalar, Scalar) tuples
+	//       representing the binding factors.
+
+	// group_public_key_enc = G.SerializeElement(group_public_key)
+	curve := s.ciphersuite.Curve()
+	groupPublicKeyEncoded := curve.SerializePoint(s.publicKey)
+
+	// msg_hash = H4(msg)
+	msgHash := s.ciphersuite.H4(message)
+
+	// encoded_commitment_hash =
+	//    H5(encode_group_commitment_list(commitment_list))
+	encodedCommitHash := s.ciphersuite.H5(s.encodeGroupCommitment(commitments))
+
+	// rho_input_prefix = group_public_key_enc || msg_hash || encoded_commitment_hash
+	rhoInputPrefix := concat(groupPublicKeyEncoded, msgHash, encodedCommitHash)
+
+	// binding_factor_list = []
+	bindingFactors := make(map[uint64]*big.Int, len(commitments))
+
+	// for (identifier, hiding_nonce_commitment,
+	//      binding_nonce_commitment) in commitment_list:
+	for _, commitment := range commitments {
+		// rho_input = rho_input_prefix || G.SerializeScalar(identifier)
+		rhoInput := make([]byte, len(rhoInputPrefix)+8)
+		copy(rhoInput, rhoInputPrefix)
+		binary.BigEndian.AppendUint64(rhoInput, commitment.signerIndex)
+		// binding_factor = H1(rho_input)
+		bindingFactor := s.ciphersuite.H1(rhoInput)
+		// binding_factor_list.append((identifier, binding_factor))
+		bindingFactors[commitment.signerIndex] = bindingFactor
+	}
+
+	// return binding_factor_list
+	return bindingFactors
+}
+
+// computeGroupCommitment implements def compute_group_commitment(commitment_list,
+// binding_factor_list) function from [FROST], as defined in section 4.5. Group
+// Commitment Computation.
+//
+// The function calling computeGroupCommitment must ensure a valid number of
+// commitments have been received and call validateGroupCommitment to validate
+// the received commitments.
+func (s *Signer) computeGroupCommitment(
+	commitments []*NonceCommitment,
+	bindingFactors bindingFactors,
+) *Point {
+	// From [FROST]:
+	//
+	// 4.5.  Group Commitment Computation
+	//
+	//   This section describes the subroutine for creating the group
+	//   commitment from a commitment list.
+	//
+	//   Inputs:
+	//     - commitment_list = [(i, hiding_nonce_commitment_i,
+	//       binding_nonce_commitment_i), ...], a list of commitments issued by
+	//       each participant, where each element in the list indicates a
+	//       NonZeroScalar identifier i and two commitment Element values
+	//       (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
+	//       MUST be sorted in ascending order by identifier.
+	//     - binding_factor_list = [(i, binding_factor), ...],
+	//       a list of (NonZeroScalar, Scalar) tuples representing the binding
+	//       factor Scalar for the given identifier.
+	//
+	//   Outputs:
+	//     - group_commitment, an Element.
+
+	curve := s.ciphersuite.Curve()
+
+	// group_commitment = G.Identity()
+	groupCommitment := curve.Identity()
+
+	// for (identifier, hiding_nonce_commitment,
+	//     binding_nonce_commitment) in commitment_list:
+	for _, commitment := range commitments {
+		// binding_factor = binding_factor_for_participant(
+		//     binding_factor_list, identifier)
+		bindingFactor := bindingFactors[commitment.signerIndex]
+		// binding_nonce = G.ScalarMult(
+		//     binding_nonce_commitment,
+		//     binding_factor)
+		bindingNonce := curve.EcMul(
+			commitment.bindingNonceCommitment,
+			bindingFactor,
+		)
+		// group_commitment = (
+		//     group_commitment +
+		//     hiding_nonce_commitment +
+		//     binding_nonce)
+		groupCommitment = curve.EcAdd(
+			groupCommitment,
+			curve.EcAdd(commitment.hidingNonceCommitment, bindingNonce),
+		)
+	}
+
+	// return group_commitment
+	return groupCommitment
+}
+
+// encodeGroupCommitment implements def encode_group_commitment_list(commitment_list)
+// function from [FROST], as defined in section 4.3.  List Operations.
+//
+// The function calling encodeGroupCommitment must ensure a valid number of
+// commitments have been received and call validateGroupCommitment to validate
+// the received commitments.
+func (s *Signer) encodeGroupCommitment(commitments []*NonceCommitment) []byte {
+	// From [FROST]:
+	//
+	// 4.3.  List Operations
+	//
+	//   This section describes helper functions that work on lists of values
+	//   produced during the FROST protocol.  The following function encodes a
+	//   list of participant commitments into a byte string for use in the
+	//   FROST protocol.
+	//
+	//   Inputs:
+	//     - commitment_list = [(i, hiding_nonce_commitment_i,
+	//       binding_nonce_commitment_i), ...], a list of commitments issued by
+	//       each participant, where each element in the list indicates a
+	//       NonZeroScalar identifier i and two commitment Element values
+	//       (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
+	//       MUST be sorted in ascending order by identifier.
+	//
+	//   Outputs:
+	//     - encoded_group_commitment, the serialized representation of
+	//       commitment_list, a byte string.
+	//
+	//   def encode_group_commitment_list(commitment_list):
+
+	curve := s.ciphersuite.Curve()
+	ecPointLength := curve.SerializedPointLength()
+
+	// preallocate the necessary space to avoid waste:
+	// 8 bytes for signerIndex (uint64)
+	// ecPointLength for hidingNonceCommitment
+	// ecPointLength for bindingNonceCommitment
+	b := make([]byte, 0, (8+2*ecPointLength)*len(commitments))
+
+	// encoded_group_commitment = nil
+	// for (identifier, hiding_nonce_commitment,
+	//      binding_nonce_commitment) in commitment_list:
+	for _, c := range commitments {
+		// encoded_commitment = (
+		//     G.SerializeScalar(identifier) ||
+		//     G.SerializeElement(hiding_nonce_commitment) ||
+		//     G.SerializeElement(binding_nonce_commitment))
+		// encoded_group_commitment = (
+		//     encoded_group_commitment ||
+		//     encoded_commitment)
+		b = binary.BigEndian.AppendUint64(b, c.signerIndex)
+		b = append(b, curve.SerializePoint(c.hidingNonceCommitment)...)
+		b = append(b, curve.SerializePoint(c.bindingNonceCommitment)...)
+	}
+
+	// return encoded_group_commitment
+	return b
 }
