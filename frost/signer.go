@@ -94,13 +94,50 @@ func (s *Signer) generateNonce(secret []byte) (*big.Int, error) {
 	return s.ciphersuite.H3(b, secret), nil
 }
 
-func (s *Signer) Round2(message []byte, commitments []*NonceCommitment) (*big.Int, error) {
-	validationErrors, _ := s.validateGroupCommitments(commitments)
+// Round2 implements the Round Two - Signature Share Generation phase from
+// [FROST], section 5.2 Round Two - Signature Share Generation.
+func (s *Signer) Round2(
+	message []byte,
+	nonce *Nonce,
+	commitments []*NonceCommitment,
+) (*big.Int, error) {
+	// TODO: validate number of commitments?
+
+	// participant_list = participants_from_commitment_list(commitment_list)
+	validationErrors, participants := s.validateGroupCommitments(commitments)
 	if len(validationErrors) != 0 {
 		return nil, errors.Join(validationErrors...)
 	}
 
-	return nil, nil // TODO: return signature share
+	// binding_factor_list = compute_binding_factors(group_public_key, commitment_list, msg)
+	bindingFactors := s.computeBindingFactors(message, commitments)
+	// binding_factor = binding_factor_for_participant(binding_factor_list, identifier)
+	bindingFactor := bindingFactors[s.signerIndex]
+
+	// group_commitment = compute_group_commitment(commitment_list, binding_factor_list)
+	groupCommitment := s.computeGroupCommitment(commitments, bindingFactors)
+
+	// lambda_i = derive_interpolating_value(participant_list, identifier)
+	lambda, err := s.deriveInterpolatingValue(s.signerIndex, participants)
+	if err != nil {
+		// should never be the case for properly validated group commitments
+		return nil, err
+	}
+
+	// challenge = compute_challenge(group_commitment, group_public_key, msg)
+	challenge := s.computeChallenge(message, groupCommitment)
+
+	bnbf := new(big.Int).Mul(nonce.bindingNonce, bindingFactor) // (binding_nonce * binding_factor)
+	lski := new(big.Int).Mul(lambda, s.secretKeyShare)          // lambda_i * sk_i
+	lskic := new(big.Int).Mul(lski, challenge)                  // (lambda_i * sk_i * challenge)
+
+	// sig_share = hiding_nonce + (binding_nonce * binding_factor) + (lambda_i * sk_i * challenge)
+	sigShare := new(big.Int).Add(
+		nonce.hidingNonce,
+		new(big.Int).Add(bnbf, lskic),
+	)
+
+	return sigShare, nil
 }
 
 // validateGroupCommitments is a helper function used internally by

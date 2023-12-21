@@ -15,12 +15,13 @@ var groupSize = 100
 func TestRound2_ValidationError(t *testing.T) {
 	// just a basic test checking if Round2 calls validateGroupCommitments
 	signers := createSigners(t)
-	_, commitments := executeRound1(t, signers)
+	nonces, commitments := executeRound1(t, signers)
 	commitments[0].bindingNonceCommitment = &Point{big.NewInt(99), big.NewInt(88)}
 
 	signer := signers[1]
+	nonce := nonces[1]
 
-	_, err := signer.Round2([]byte("dummy"), commitments)
+	_, err := signer.Round2([]byte("dummy"), nonce, commitments)
 	if err == nil {
 		t.Fatalf("expected a non-nil error")
 	}
