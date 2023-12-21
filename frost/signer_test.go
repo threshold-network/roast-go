@@ -43,9 +43,11 @@ func TestValidateGroupCommitments_Errors(t *testing.T) {
 	signers := createSigners(t)
 	_, commitments := executeRound1(t, signers)
 
-	tmp := commitments[31]
+	// duplicate commitment from signer 5 at positions 4 and 5
+	commitments[5] = commitments[4]
 	// at the position where we'd expect a commitment from signer 32 we have
 	// a commitment from signer 51
+	tmp := commitments[31]
 	commitments[31] = commitments[50]
 	// at the position where we'd expect a commitment from signer 51 we have
 	// a commitment from signer 32
@@ -59,16 +61,18 @@ func TestValidateGroupCommitments_Errors(t *testing.T) {
 
 	validationErrors := signer.validateGroupCommitments(commitments)
 
-	expectedError1 := "commitments not sorted in ascending order: commitments[31].signerIndex=51, commitments[32].signerIndex=33"
-	expectedError2 := "commitments not sorted in ascending order: commitments[49].signerIndex=50, commitments[50].signerIndex=32"
-	expectedError3 := "binding nonce commitment from signer [81] is not a valid non-identity point on the curve: [Point[X=0x64, Y=0xc8]]"
-	expectedError4 := "hiding nonce commitment from signer [100] is not a valid non-identity point on the curve: [Point[X=0x12c, Y=0x190]]"
+	expectedError1 := "commitments not sorted in ascending order: commitments[4].signerIndex=5, commitments[5].signerIndex=5"
+	expectedError2 := "commitments not sorted in ascending order: commitments[31].signerIndex=51, commitments[32].signerIndex=33"
+	expectedError3 := "commitments not sorted in ascending order: commitments[49].signerIndex=50, commitments[50].signerIndex=32"
+	expectedError4 := "binding nonce commitment from signer [81] is not a valid non-identity point on the curve: [Point[X=0x64, Y=0xc8]]"
+	expectedError5 := "hiding nonce commitment from signer [100] is not a valid non-identity point on the curve: [Point[X=0x12c, Y=0x190]]"
 
-	testutils.AssertIntsEqual(t, "number of validation errors", 4, len(validationErrors))
+	testutils.AssertIntsEqual(t, "number of validation errors", 5, len(validationErrors))
 	testutils.AssertStringsEqual(t, "validation error #1", expectedError1, validationErrors[0].Error())
 	testutils.AssertStringsEqual(t, "validation error #2", expectedError2, validationErrors[1].Error())
 	testutils.AssertStringsEqual(t, "validation error #3", expectedError3, validationErrors[2].Error())
 	testutils.AssertStringsEqual(t, "validation error #4", expectedError4, validationErrors[3].Error())
+	testutils.AssertStringsEqual(t, "validation error #5", expectedError5, validationErrors[4].Error())
 }
 
 func TestEncodeGroupCommitments(t *testing.T) {
