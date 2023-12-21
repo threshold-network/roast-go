@@ -27,6 +27,19 @@ func AssertBigIntsEqual(t *testing.T, description string, expected *big.Int, act
 	}
 }
 
+// AssertUintsEqual checks if two unsigned integers are equal. If not, it
+// reports a test failure.
+func AssertUintsEqual(t *testing.T, description string, expected uint64, actual uint64) {
+	if expected != actual {
+		t.Errorf(
+			"unexpected %s\nexpected: %v\nactual:   %v\n",
+			description,
+			expected,
+			actual,
+		)
+	}
+}
+
 // AssertIntsEqual checks if two integers are equal. If not, it reports a test
 // failure.
 func AssertIntsEqual(t *testing.T, description string, expected int, actual int) {

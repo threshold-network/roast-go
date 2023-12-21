@@ -24,6 +24,7 @@ func TestRound2_ValidationError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected a non-nil error")
 	}
+
 	// assert if this is indeed a validation error
 	expectedError := "binding nonce commitment from signer [1] is not a valid non-identity point on the curve: [Point[X=0x63, Y=0x58]]"
 	testutils.AssertStringsEqual(t, "validation error", expectedError, err.Error())
@@ -35,8 +36,16 @@ func TestValidateGroupCommitments(t *testing.T) {
 
 	signer := signers[0]
 
-	validationErrors := signer.validateGroupCommitments(commitments)
+	validationErrors, participants := signer.validateGroupCommitments(commitments)
 	testutils.AssertIntsEqual(t, "number of validation errors", 0, len(validationErrors))
+	testutils.AssertIntsEqual(t, "number of participants", groupSize, len(participants))
+
+	for i, p := range participants {
+		expected := uint64(i + 1)
+		if p != expected {
+			testutils.AssertUintsEqual(t, "participant index", expected, p)
+		}
+	}
 }
 
 func TestValidateGroupCommitments_Errors(t *testing.T) {
@@ -59,7 +68,7 @@ func TestValidateGroupCommitments_Errors(t *testing.T) {
 
 	signer := signers[0]
 
-	validationErrors := signer.validateGroupCommitments(commitments)
+	validationErrors, participants := signer.validateGroupCommitments(commitments)
 
 	expectedError1 := "commitments not sorted in ascending order: commitments[4].signerIndex=5, commitments[5].signerIndex=5"
 	expectedError2 := "commitments not sorted in ascending order: commitments[31].signerIndex=51, commitments[32].signerIndex=33"
@@ -73,6 +82,9 @@ func TestValidateGroupCommitments_Errors(t *testing.T) {
 	testutils.AssertStringsEqual(t, "validation error #3", expectedError3, validationErrors[2].Error())
 	testutils.AssertStringsEqual(t, "validation error #4", expectedError4, validationErrors[3].Error())
 	testutils.AssertStringsEqual(t, "validation error #5", expectedError5, validationErrors[4].Error())
+	if participants != nil {
+		t.Fatalf("expected nil participants list, has [%v]", participants)
+	}
 }
 
 func TestEncodeGroupCommitments(t *testing.T) {
