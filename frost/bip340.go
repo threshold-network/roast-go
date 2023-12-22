@@ -60,6 +60,11 @@ func (bc *Bip340Curve) Identity() *Point {
 	return &Point{big.NewInt(0), big.NewInt(0)}
 }
 
+// Order returns the order of the group produced by the elliptic curve generator.
+func (bc *Bip340Curve) Order() *big.Int {
+	return new(big.Int).Set(bc.N)
+}
+
 // IsPointOnCurve validates if the point lies on the curve and is not an
 // identity element.
 func (bc *Bip340Curve) IsPointOnCurve(p *Point) bool {

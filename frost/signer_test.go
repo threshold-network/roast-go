@@ -43,9 +43,11 @@ func TestValidateGroupCommitments_Errors(t *testing.T) {
 	signers := createSigners(t)
 	_, commitments := executeRound1(t, signers)
 
-	tmp := commitments[31]
+	// duplicate commitment from signer 5 at positions 4 and 5
+	commitments[5] = commitments[4]
 	// at the position where we'd expect a commitment from signer 32 we have
 	// a commitment from signer 51
+	tmp := commitments[31]
 	commitments[31] = commitments[50]
 	// at the position where we'd expect a commitment from signer 51 we have
 	// a commitment from signer 32
@@ -59,16 +61,18 @@ func TestValidateGroupCommitments_Errors(t *testing.T) {
 
 	validationErrors := signer.validateGroupCommitments(commitments)
 
-	expectedError1 := "commitments not sorted in ascending order: commitments[31].signerIndex=51, commitments[32].signerIndex=33"
-	expectedError2 := "commitments not sorted in ascending order: commitments[49].signerIndex=50, commitments[50].signerIndex=32"
-	expectedError3 := "binding nonce commitment from signer [81] is not a valid non-identity point on the curve: [Point[X=0x64, Y=0xc8]]"
-	expectedError4 := "hiding nonce commitment from signer [100] is not a valid non-identity point on the curve: [Point[X=0x12c, Y=0x190]]"
+	expectedError1 := "commitments not sorted in ascending order: commitments[4].signerIndex=5, commitments[5].signerIndex=5"
+	expectedError2 := "commitments not sorted in ascending order: commitments[31].signerIndex=51, commitments[32].signerIndex=33"
+	expectedError3 := "commitments not sorted in ascending order: commitments[49].signerIndex=50, commitments[50].signerIndex=32"
+	expectedError4 := "binding nonce commitment from signer [81] is not a valid non-identity point on the curve: [Point[X=0x64, Y=0xc8]]"
+	expectedError5 := "hiding nonce commitment from signer [100] is not a valid non-identity point on the curve: [Point[X=0x12c, Y=0x190]]"
 
-	testutils.AssertIntsEqual(t, "number of validation errors", 4, len(validationErrors))
+	testutils.AssertIntsEqual(t, "number of validation errors", 5, len(validationErrors))
 	testutils.AssertStringsEqual(t, "validation error #1", expectedError1, validationErrors[0].Error())
 	testutils.AssertStringsEqual(t, "validation error #2", expectedError2, validationErrors[1].Error())
 	testutils.AssertStringsEqual(t, "validation error #3", expectedError3, validationErrors[2].Error())
 	testutils.AssertStringsEqual(t, "validation error #4", expectedError4, validationErrors[3].Error())
+	testutils.AssertStringsEqual(t, "validation error #5", expectedError5, validationErrors[4].Error())
 }
 
 func TestEncodeGroupCommitments(t *testing.T) {
@@ -120,6 +124,116 @@ func TestEncodeGroupCommitments(t *testing.T) {
 		expectedEncoded,
 		hex.EncodeToString(encoded),
 	)
+}
+
+func TestDeriveInterpolatingValue(t *testing.T) {
+	var tests = map[string]struct {
+		xi       uint64
+		L        []uint64
+		expected string
+	}{
+		// Lagrange coefficient l_0 is:
+		//
+		//       (x-4)(x-5)
+		// l_0 = ----------
+		//       (1-4)(1-5)
+		//
+		// Since x is always 0 for this function, l_0 = 20/12 (mod Q).
+		//
+		// Then we calculate ((12^-1 mod Q) * 20) mod Q
+		// where Q is the order of secp256k1.
+		//
+		"xi = 1, L = {1, 4, 5}": {
+			xi:       1,
+			L:        []uint64{1, 4, 5},
+			expected: "38597363079105398474523661669562635950945854759691634794201721047172720498114",
+		},
+		// Lagrange coefficient l_1 is:
+		//
+		//       (x-1)(x-5)
+		// l_1 = ----------
+		//       (4-1)(4-5)
+		//
+		// Since x is always 0 for this function, l_0 = 5/-3 (mod Q).
+		// Given the negative denominator and mod Q, the number will be
+		// l_0 = 5/(Q-3).
+		//
+		// Then we calculate (((Q-3)^-1 mod Q) * 5) mod Q
+		// where Q is the order of secp256k1.
+		//
+		"xi = 4, L = {1, 4, 5}": {
+			xi:       4,
+			L:        []uint64{1, 4, 5},
+			expected: "77194726158210796949047323339125271901891709519383269588403442094345440996223",
+		},
+		// Lagrange coefficient l_2 is:
+		//
+		//       (x-1)(x-4)
+		// l_1 = ----------
+		//       (5-1)(5-4)
+		//
+		// Since x is always 0 for this function, l_0 = 4/4 (mod Q).
+		//
+		// Then we calculate ((1^-1 mod Q) * 1) mod Q
+		// where Q is the order of secp256k1.
+		//
+		"xi = 5, L = {1, 4, 5}": {
+			xi:       5,
+			L:        []uint64{1, 4, 5},
+			expected: "1",
+		},
+	}
+
+	signer := createSigners(t)[0]
+	for testName, test := range tests {
+		t.Run(testName, func(t *testing.T) {
+			result, err := signer.deriveInterpolatingValue(test.xi, test.L)
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutils.AssertStringsEqual(
+				t,
+				"interpolating value",
+				test.expected,
+				result.Text(10),
+			)
+		})
+	}
+}
+
+func TestDeriveInterpolatingValue_InvalidParameters(t *testing.T) {
+	var tests = map[string]struct {
+		xi          uint64
+		L           []uint64
+		expectedErr string
+	}{
+		"xi present more than one time in L": {
+			xi:          5,
+			L:           []uint64{1, 4, 5, 5},
+			expectedErr: "invalid parameters: xi=[5] present more than one time in L=[[1 4 5 5]]",
+		},
+		"xi not present in L": {
+			xi:          3,
+			L:           []uint64{1, 4, 5},
+			expectedErr: "invalid parameters: xi=[3] not present in L=[[1 4 5]]",
+		},
+	}
+
+	signer := createSigners(t)[0]
+	for testName, test := range tests {
+		t.Run(testName, func(t *testing.T) {
+			_, err := signer.deriveInterpolatingValue(test.xi, test.L)
+			if err == nil {
+				t.Fatalf("expected a non-nil error")
+			}
+			testutils.AssertStringsEqual(
+				t,
+				"parameters error",
+				test.expectedErr,
+				err.Error(),
+			)
+		})
+	}
 }
 
 func createSigners(t *testing.T) []*Signer {

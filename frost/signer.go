@@ -307,7 +307,7 @@ func (s *Signer) computeGroupCommitment(
 }
 
 // encodeGroupCommitment implements def encode_group_commitment_list(commitment_list)
-// function from [FROST], as defined in section 4.3.  List Operations.
+// function from [FROST], as defined in section 4.3. List Operations.
 //
 // The function calling encodeGroupCommitment must ensure a valid number of
 // commitments have been received and call validateGroupCommitment to validate
@@ -363,4 +363,88 @@ func (s *Signer) encodeGroupCommitment(commitments []*NonceCommitment) []byte {
 
 	// return encoded_group_commitment
 	return b
+}
+
+// deriveInterpolatingValue implements def derive_interpolating_value(L, x_i)
+// function from [FROST], as defined in section 4.2 Polynomials.
+// L is the list of the indices of the members of the particular group.
+// xi is the index of the participant i.
+func (s *Signer) deriveInterpolatingValue(xi uint64, L []uint64) (*big.Int, error) {
+	// From [FROST]:
+	//
+	// 4.2.  Polynomials
+	//
+	//   This section defines polynomials over Scalars that are used in the
+	//   main protocol.  A polynomial of maximum degree t is represented as a
+	//   list of t+1 coefficients, where the constant term of the polynomial
+	//   is in the first position and the highest-degree coefficient is in the
+	//   last position.  For example, the polynomial x^2 + 2x + 3 has degree 2
+	//   and is represented as a list of 3 coefficients [3, 2, 1].  A point on
+	//   the polynomial f is a tuple (x, y), where y = f(x).
+	//
+	//   The function derive_interpolating_value derives a value used for
+	//   polynomial interpolation.  It is provided a list of x-coordinates as
+	//   input, each of which cannot equal 0.
+	//
+	//   Inputs:
+	//     - L, the list of x-coordinates, each a NonZeroScalar.
+	//     - x_i, an x-coordinate contained in L, a NonZeroScalar.
+	//
+	//   Outputs:
+	//     - value, a Scalar.
+	//
+	//   Errors:
+	//     - "invalid parameters", if 1) x_i is not in L, or if 2) any
+	//       x-coordinate is represented more than once in L.
+	//
+	//   def derive_interpolating_value(L, x_i):
+
+	order := s.ciphersuite.Curve().Order()
+	found := false
+	// numerator = Scalar(1)
+	num := big.NewInt(1)
+	// denominator = Scalar(1)
+	den := big.NewInt(1)
+	// for x_j in L:
+	for _, xj := range L {
+		if xj == xi {
+			// for x_j in L:
+			//     if count(x_j, L) > 1:
+			//         raise "invalid parameters"
+			if found {
+				return nil, fmt.Errorf(
+					"invalid parameters: xi=[%v] present more than one time in L=[%v]",
+					xi,
+					L,
+				)
+			}
+			found = true
+			// if x_j == x_i: continue
+			continue
+		}
+		// numerator *= x_j
+		num.Mul(num, big.NewInt(int64(xj)))
+		num.Mod(num, order)
+		// denominator *= x_j - x_i
+		den.Mul(den, big.NewInt(int64(xj)-int64(xi)))
+		den.Mod(den, order)
+	}
+
+	// if x_i not in L:
+	//     raise "invalid parameters"
+	if !found {
+		return nil, fmt.Errorf(
+			"invalid parameters: xi=[%v] not present in L=[%v]",
+			xi,
+			L,
+		)
+	}
+
+	// value = numerator / denominator
+	denInv := new(big.Int).ModInverse(den, order)
+	res := new(big.Int).Mul(num, denInv)
+	res = res.Mod(res, order)
+
+	// return value
+	return res, nil
 }
