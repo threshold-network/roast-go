@@ -118,11 +118,7 @@ func (s *Signer) Round2(
 	groupCommitment := s.computeGroupCommitment(commitments, bindingFactors)
 
 	// lambda_i = derive_interpolating_value(participant_list, identifier)
-	lambda, err := s.deriveInterpolatingValue(s.signerIndex, participants)
-	if err != nil {
-		// should never be the case for properly validated group commitments
-		return nil, err
-	}
+	lambda := s.deriveInterpolatingValue(s.signerIndex, participants)
 
 	// challenge = compute_challenge(group_commitment, group_public_key, msg)
 	challenge := s.computeChallenge(message, groupCommitment)
@@ -141,10 +137,12 @@ func (s *Signer) Round2(
 }
 
 // validateGroupCommitments is a helper function used internally by
-// encodeGroupCommitment to validate the group commitments. Two validations are
-// done:
+// encodeGroupCommitment to validate the group commitments. Four validations
+// are done:
 // - None of the commitments is a point not lying on the curve.
 // - The list of commitments is sorted in ascending order by signer identifier.
+// - This signer's commitment is included in the commitments.
+// - None of the commitments is nil.
 //
 // Additionally, the function returns the list of participants if there were no
 // validation errors. This way, the function implements
@@ -179,15 +177,25 @@ func (s *Signer) validateGroupCommitments(
 
 	curve := s.ciphersuite.Curve()
 
+	found := false
+
 	// we index from 1 so this number will always be lower
 	lastSignerIndex := uint64(0)
 
 	for i, c := range commitments {
+		if c == nil {
+			errors = append(
+				errors,
+				fmt.Errorf("commitment at position [%d] is nil", i),
+			)
+			continue
+		}
+
 		if c.signerIndex <= lastSignerIndex {
 			errors = append(
 				errors, fmt.Errorf(
 					"commitments not sorted in ascending order: "+
-						"commitments[%v].signerIndex=%v, commitments[%v].signerIndex=%v",
+						"commitments[%d].signerIndex=%d, commitments[%d].signerIndex=%d",
 					i-1,
 					lastSignerIndex,
 					i,
@@ -199,9 +207,13 @@ func (s *Signer) validateGroupCommitments(
 		lastSignerIndex = c.signerIndex
 		participants[i] = c.signerIndex
 
+		if c.signerIndex == s.signerIndex {
+			found = true
+		}
+
 		if !curve.IsPointOnCurve(c.bindingNonceCommitment) {
 			errors = append(errors, fmt.Errorf(
-				"binding nonce commitment from signer [%v] is not a valid "+
+				"binding nonce commitment from signer [%d] is not a valid "+
 					"non-identity point on the curve: [%s]",
 				c.signerIndex,
 				c.bindingNonceCommitment,
@@ -210,12 +222,19 @@ func (s *Signer) validateGroupCommitments(
 
 		if !curve.IsPointOnCurve(c.hidingNonceCommitment) {
 			errors = append(errors, fmt.Errorf(
-				"hiding nonce commitment from signer [%v] is not a valid "+
+				"hiding nonce commitment from signer [%d] is not a valid "+
 					"non-identity point on the curve: [%s]",
 				c.signerIndex,
 				c.hidingNonceCommitment,
 			))
 		}
+	}
+
+	if !found {
+		errors = append(
+			errors,
+			fmt.Errorf("current signer's commitment not found on the list"),
+		)
 	}
 
 	// return participants only when there were no validation errors
@@ -421,7 +440,11 @@ func (s *Signer) encodeGroupCommitment(commitments []*NonceCommitment) []byte {
 // function from [FROST], as defined in section 4.2 Polynomials.
 // L is the list of the indices of the members of the particular group.
 // xi is the index of the participant i.
-func (s *Signer) deriveInterpolatingValue(xi uint64, L []uint64) (*big.Int, error) {
+//
+// The function calling deriveInterpolatingValue must ensure a valid number of
+// commitments have been received and call validateGroupCommitment to validate
+// the received commitments.
+func (s *Signer) deriveInterpolatingValue(xi uint64, L []uint64) *big.Int {
 	// From [FROST]:
 	//
 	// 4.2.  Polynomials
@@ -451,8 +474,9 @@ func (s *Signer) deriveInterpolatingValue(xi uint64, L []uint64) (*big.Int, erro
 	//
 	//   def derive_interpolating_value(L, x_i):
 
+	// Note that the validation is handled in validateGroupCommitment function.
+
 	order := s.ciphersuite.Curve().Order()
-	found := false
 	// numerator = Scalar(1)
 	num := big.NewInt(1)
 	// denominator = Scalar(1)
@@ -460,17 +484,6 @@ func (s *Signer) deriveInterpolatingValue(xi uint64, L []uint64) (*big.Int, erro
 	// for x_j in L:
 	for _, xj := range L {
 		if xj == xi {
-			// for x_j in L:
-			//     if count(x_j, L) > 1:
-			//         raise "invalid parameters"
-			if found {
-				return nil, fmt.Errorf(
-					"invalid parameters: xi=[%v] present more than one time in L=[%v]",
-					xi,
-					L,
-				)
-			}
-			found = true
 			// if x_j == x_i: continue
 			continue
 		}
@@ -482,23 +495,13 @@ func (s *Signer) deriveInterpolatingValue(xi uint64, L []uint64) (*big.Int, erro
 		den.Mod(den, order)
 	}
 
-	// if x_i not in L:
-	//     raise "invalid parameters"
-	if !found {
-		return nil, fmt.Errorf(
-			"invalid parameters: xi=[%v] not present in L=[%v]",
-			xi,
-			L,
-		)
-	}
-
 	// value = numerator / denominator
 	denInv := new(big.Int).ModInverse(den, order)
 	res := new(big.Int).Mul(num, denInv)
 	res = res.Mod(res, order)
 
 	// return value
-	return res, nil
+	return res
 }
 
 // computeChallenge implements def compute_group_commitment(commitment_list,

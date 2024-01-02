@@ -95,7 +95,7 @@ func TestBip340CurveDeserialize(t *testing.T) {
 
 	serialized := curve.SerializePoint(point)
 
-	var tests = map[string]struct {
+	tests := map[string]struct {
 		input []byte
 	}{
 		"nil": {
@@ -133,7 +133,7 @@ func TestBip340CiphersuiteH1(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
-	var tests = map[string]struct {
+	tests := map[string]struct {
 		m        []byte
 		expected string
 	}{
@@ -160,7 +160,7 @@ func TestBip340CiphersuiteH2(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
-	var tests = map[string]struct {
+	tests := map[string]struct {
 		m        []byte
 		ms       [][]byte
 		expected string
@@ -200,7 +200,7 @@ func TestBip340CiphersuiteH3(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
-	var tests = map[string]struct {
+	tests := map[string]struct {
 		m        []byte
 		ms       [][]byte
 		expected string
@@ -239,7 +239,7 @@ func TestBip340CiphersuiteH4(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
-	var tests = map[string]struct {
+	tests := map[string]struct {
 		m        []byte
 		expected string
 	}{
@@ -269,7 +269,7 @@ func TestBip340CiphersuiteH5(t *testing.T) {
 	// There are no official test vectors available. Yet, we want to ensure the
 	// function does not panic for empty or nil. We also want to make sure the
 	// happy path works producing a non-zero value.
-	var tests = map[string]struct {
+	tests := map[string]struct {
 		m        []byte
 		expected string
 	}{
@@ -296,7 +296,7 @@ func TestBip340CiphersuiteH5(t *testing.T) {
 }
 
 func TestBip340CiphersuiteHashToScalar(t *testing.T) {
-	var tests = map[string]struct {
+	tests := map[string]struct {
 		tag []byte
 		msg []byte
 	}{
@@ -345,7 +345,7 @@ func TestBip340CiphersuiteHashToScalar(t *testing.T) {
 }
 
 func TestBip340CiphersuiteHash(t *testing.T) {
-	var tests = map[string]struct {
+	tests := map[string]struct {
 		tag []byte
 		msg []byte
 	}{
@@ -395,7 +395,7 @@ func TestBip340CiphersuiteHash(t *testing.T) {
 }
 
 func TestConcat(t *testing.T) {
-	var tests = map[string]struct {
+	tests := map[string]struct {
 		expected []byte
 		a        []byte
 		b        [][]byte
@@ -453,7 +453,7 @@ func TestConcat(t *testing.T) {
 }
 
 func TestOs2Ip(t *testing.T) {
-	var tests = map[string]struct {
+	tests := map[string]struct {
 		expected *big.Int
 		input    []byte
 	}{
