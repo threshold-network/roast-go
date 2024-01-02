@@ -43,6 +43,9 @@ type Curve interface {
 	// EcAdd returns the sum of two elliptic curve points.
 	EcAdd(*Point, *Point) *Point
 
+	// EcSub returns the subtraction of two elliptic curve points.
+	EcSub(*Point, *Point) *Point
+
 	// Identity returns elliptic curve identity element.
 	Identity() *Point
 

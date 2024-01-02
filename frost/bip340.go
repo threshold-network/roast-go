@@ -52,6 +52,12 @@ func (bc *Bip340Curve) EcAdd(a *Point, b *Point) *Point {
 	return &Point{x, y}
 }
 
+// EcSub returns the subtraction of two elliptic curve points.
+func (bc *Bip340Curve) EcSub(a *Point, b *Point) *Point {
+	bNeg := &Point{b.X, new(big.Int).Neg(b.Y)}
+	return bc.EcAdd(a, bNeg)
+}
+
 // Identity returns elliptic curve identity element.
 func (bc *Bip340Curve) Identity() *Point {
 	// For elliptic curves, the identity is the point at infinity.
