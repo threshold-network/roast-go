@@ -142,15 +142,19 @@ func (s *Signer) Round2(
 
 // validateGroupCommitments is a helper function used internally in RoundTwo
 // to validate the group commitments. Four validations are done:
+// - This signer's commitment is included in the commitments.
 // - None of the commitments is a point not lying on the curve.
 // - The list of commitments is sorted in ascending order by signer identifier.
-// - This signer's commitment is included in the commitments.
 // - None of the commitments is nil.
 //
 // Additionally, the function returns the list of participants if there were no
 // validation errors. This way, the function implements
 // def participants_from_commitment_list(commitment_list) function from [FROST]
 // section 4.3. List Operations.
+//
+// If this signer's commitment is not included in the commitments, the function
+// does not perform the rest of validations to not spend any more computing
+// resources.
 func (s *Signer) validateGroupCommitments(
 	commitments []*NonceCommitment,
 ) ([]error, []uint64) {
@@ -183,75 +187,19 @@ func (s *Signer) validateGroupCommitments(
 	//	 (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
 	//	 MUST be sorted in ascending order by identifier.
 
-	participants := make([]uint64, len(commitments))
-	var errors []error
-
-	curve := s.ciphersuite.Curve()
-
 	found := false
-
-	// we index from 1 so this number will always be lower
-	lastSignerIndex := uint64(0)
-
-	for i, c := range commitments {
-		if c == nil {
-			errors = append(
-				errors,
-				fmt.Errorf("commitment at position [%d] is nil", i),
-			)
-			continue
-		}
-
-		if c.signerIndex <= lastSignerIndex {
-			errors = append(
-				errors, fmt.Errorf(
-					"commitments not sorted in ascending order: "+
-						"commitments[%d].signerIndex=%d, commitments[%d].signerIndex=%d",
-					i-1,
-					lastSignerIndex,
-					i,
-					c.signerIndex,
-				),
-			)
-		}
-
-		lastSignerIndex = c.signerIndex
-		participants[i] = c.signerIndex
-
-		if c.signerIndex == s.signerIndex {
+	for _, c := range commitments {
+		if c != nil && c.signerIndex == s.signerIndex {
 			found = true
-		}
-
-		if !curve.IsPointOnCurve(c.bindingNonceCommitment) {
-			errors = append(errors, fmt.Errorf(
-				"binding nonce commitment from signer [%d] is not a valid "+
-					"non-identity point on the curve: [%s]",
-				c.signerIndex,
-				c.bindingNonceCommitment,
-			))
-		}
-
-		if !curve.IsPointOnCurve(c.hidingNonceCommitment) {
-			errors = append(errors, fmt.Errorf(
-				"hiding nonce commitment from signer [%d] is not a valid "+
-					"non-identity point on the curve: [%s]",
-				c.signerIndex,
-				c.hidingNonceCommitment,
-			))
+			break
 		}
 	}
 
 	if !found {
-		errors = append(
-			errors,
+		return []error{
 			fmt.Errorf("current signer's commitment not found on the list"),
-		)
+		}, nil
 	}
 
-	// return participants only when there were no validation errors
-	if len(errors) == 0 {
-		return nil, participants
-	}
-
-	return errors, nil
+	return s.validateGroupCommitmentsBase(commitments)
 }

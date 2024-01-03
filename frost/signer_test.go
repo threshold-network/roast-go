@@ -123,34 +123,31 @@ func TestValidateGroupCommitments_Errors(t *testing.T) {
 		},
 		"multiple problems": {
 			modifyCommitments: func(commitments []*NonceCommitment) []*NonceCommitment {
-				// the test uses signers[0] so let remove commitment from this signer
-				modified := slices.Delete(commitments, 0, 1)
-				// duplicate commitment from signer 6 at positions 4 and 5
-				modified[5] = modified[4]
-				// at the position where we'd expect a commitment from signer 33 we have
-				// a commitment from signer 52
-				tmp := modified[31]
-				modified[31] = modified[50]
-				// at the position where we'd expect a commitment from signer 52 we have
-				// a commitment from signer 33
-				modified[50] = tmp
-				// binding nonce commitment for signer 82 is an invalid curve point
-				modified[80].bindingNonceCommitment = &Point{big.NewInt(100), big.NewInt(200)}
+				// duplicate commitment from signer 5 at positions 4 and 5
+				commitments[5] = commitments[4]
+				// at the position where we'd expect a commitment from signer 32 we have
+				// a commitment from signer 51
+				tmp := commitments[31]
+				commitments[31] = commitments[50]
+				// at the position where we'd expect a commitment from signer 51 we have
+				// a commitment from signer 32
+				commitments[50] = tmp
+				// binding nonce commitment for signer 81 is an invalid curve point
+				commitments[80].bindingNonceCommitment = &Point{big.NewInt(100), big.NewInt(200)}
 				// hiding nonce commitment for signer 100 is an invalid curve point
-				modified[98].hidingNonceCommitment = &Point{big.NewInt(300), big.NewInt(400)}
+				commitments[99].hidingNonceCommitment = &Point{big.NewInt(300), big.NewInt(400)}
 				// finally, we'll set the nil commitment at position 97 where we would
-				// expect a commitment from signer 99
-				modified[97] = nil
-				return modified
+				// expect a commitment from signer 98
+				commitments[97] = nil
+				return commitments
 			},
 			expectedErrors: []string{
-				"commitments not sorted in ascending order: commitments[4].signerIndex=6, commitments[5].signerIndex=6",
-				"commitments not sorted in ascending order: commitments[31].signerIndex=52, commitments[32].signerIndex=34",
-				"commitments not sorted in ascending order: commitments[49].signerIndex=51, commitments[50].signerIndex=33",
-				"binding nonce commitment from signer [82] is not a valid non-identity point on the curve: [Point[X=0x64, Y=0xc8]]",
+				"commitments not sorted in ascending order: commitments[4].signerIndex=5, commitments[5].signerIndex=5",
+				"commitments not sorted in ascending order: commitments[31].signerIndex=51, commitments[32].signerIndex=33",
+				"commitments not sorted in ascending order: commitments[49].signerIndex=50, commitments[50].signerIndex=32",
+				"binding nonce commitment from signer [81] is not a valid non-identity point on the curve: [Point[X=0x64, Y=0xc8]]",
 				"commitment at position [97] is nil",
 				"hiding nonce commitment from signer [100] is not a valid non-identity point on the curve: [Point[X=0x12c, Y=0x190]]",
-				"current signer's commitment not found on the list",
 			},
 		},
 	}
@@ -174,6 +171,14 @@ func TestValidateGroupCommitments_Errors(t *testing.T) {
 				len(test.expectedErrors),
 				len(validationErrors),
 			)
+			if len(test.expectedErrors) != len(validationErrors) {
+				// Using Fatalf directly to not execute the rest of assertions
+				t.Fatalf(
+					"unexpected number of validation errors\nexpected: %v\nactual:   %v\n",
+					len(test.expectedErrors),
+					len(validationErrors),
+				)
+			}
 
 			for i, expectedError := range test.expectedErrors {
 				testutils.AssertStringsEqual(

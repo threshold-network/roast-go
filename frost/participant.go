@@ -2,6 +2,7 @@ package frost
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/big"
 )
 
@@ -23,13 +24,110 @@ type NonceCommitment struct {
 // bindingFactors is a helper structure produced by computeBindingFactors function.
 type bindingFactors map[uint64]*big.Int
 
+// validateGroupCommitmentsBase is a helper function used internally by signer
+// and coordinator to validate the group commitments. Three validations are done:
+// - None of the commitments is a point not lying on the curve.
+// - The list of commitments is sorted in ascending order by signer identifier.
+// - None of the commitments is nil.
+//
+// Note that the presence of the given signer's commitment on the list is NOT
+// performed by this function and needs to be performed by the signer separately.
+//
+// Additionally, the function returns the list of participants if there were no
+// validation errors. This way, the function implements
+// def participants_from_commitment_list(commitment_list) function from [FROST]
+// section 4.3. List Operations.
+func (p *Participant) validateGroupCommitmentsBase(
+	commitments []*NonceCommitment,
+) ([]error, []uint64) {
+	// Validations performed, as specified in [FROST]:
+	//
+	// 3.1 Prime-Order Group
+	//
+	//   (...)
+	//
+	//   SerializeElement(A): Maps an Element A to a canonical byte array
+	//   buf of fixed length Ne.  This function raises an error if A is the
+	//   identity element of the group.
+	//
+	// 4.3. List Operations
+	//
+	//   (...)
+	//
+	//   commitment_list = [(i, hiding_nonce_commitment_i,
+	//	 binding_nonce_commitment_i), ...], a list of commitments issued by
+	//	 each participant, where each element in the list indicates a
+	//	 NonZeroScalar identifier i and two commitment Element values
+	//	 (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
+	//	 MUST be sorted in ascending order by identifier.
+
+	participants := make([]uint64, len(commitments))
+	var errors []error
+
+	curve := p.ciphersuite.Curve()
+
+	// we index from 1 so this number will always be lower
+	lastSignerIndex := uint64(0)
+
+	for i, c := range commitments {
+		if c == nil {
+			errors = append(
+				errors,
+				fmt.Errorf("commitment at position [%d] is nil", i),
+			)
+			continue
+		}
+
+		if c.signerIndex <= lastSignerIndex {
+			errors = append(
+				errors, fmt.Errorf(
+					"commitments not sorted in ascending order: "+
+						"commitments[%d].signerIndex=%d, commitments[%d].signerIndex=%d",
+					i-1,
+					lastSignerIndex,
+					i,
+					c.signerIndex,
+				),
+			)
+		}
+
+		lastSignerIndex = c.signerIndex
+		participants[i] = c.signerIndex
+
+		if !curve.IsPointOnCurve(c.bindingNonceCommitment) {
+			errors = append(errors, fmt.Errorf(
+				"binding nonce commitment from signer [%d] is not a valid "+
+					"non-identity point on the curve: [%s]",
+				c.signerIndex,
+				c.bindingNonceCommitment,
+			))
+		}
+
+		if !curve.IsPointOnCurve(c.hidingNonceCommitment) {
+			errors = append(errors, fmt.Errorf(
+				"hiding nonce commitment from signer [%d] is not a valid "+
+					"non-identity point on the curve: [%s]",
+				c.signerIndex,
+				c.hidingNonceCommitment,
+			))
+		}
+	}
+
+	// return participants only when there were no validation errors
+	if len(errors) == 0 {
+		return nil, participants
+	}
+
+	return errors, nil
+}
+
 // computeBindingFactors implements def compute_binding_factors(group_public_key,
 // commitment_list, msg) function from [FROST], as defined in section 4.4. Binding
 // Factors Computation.
 //
 // The function calling computeBindingFactors must ensure a valid number of
-// commitments have been received and call validateGroupCommitment to validate
-// the received commitments.
+// commitments have been received and call validateGroupCommitmentsBase to
+// validate the received commitments.
 func (p *Participant) computeBindingFactors(
 	message []byte,
 	commitments []*NonceCommitment,
@@ -97,8 +195,8 @@ func (p *Participant) computeBindingFactors(
 // Commitment Computation.
 //
 // The function calling computeGroupCommitment must ensure a valid number of
-// commitments have been received and call validateGroupCommitment to validate
-// the received commitments.
+// commitments have been received and call validateGroupCommitmentsBase to
+// validate the received commitments.
 func (p *Participant) computeGroupCommitment(
 	commitments []*NonceCommitment,
 	bindingFactors bindingFactors,
@@ -160,8 +258,8 @@ func (p *Participant) computeGroupCommitment(
 // function from [FROST], as defined in section 4.3. List Operations.
 //
 // The function calling encodeGroupCommitment must ensure a valid number of
-// commitments have been received and call validateGroupCommitment to validate
-// the received commitments.
+// commitments have been received and call validateGroupCommitmentsBase to
+// validate the received commitments.
 func (p *Participant) encodeGroupCommitment(
 	commitments []*NonceCommitment,
 ) []byte {
@@ -223,8 +321,13 @@ func (p *Participant) encodeGroupCommitment(
 // xi is the index of the participant i.
 //
 // The function calling deriveInterpolatingValue must ensure a valid number of
-// commitments have been received and call validateGroupCommitment to validate
-// the received commitments.
+// commitments have been received and call validateGroupCommitmentBase to
+// validate the received commitments.
+//
+// The function calling deriveInterpolatingValue MUST ensure xi is in L.
+// This logic is NOT present in deriveInterpolatingValue to simplify signer
+// and coordinator code, both using this function and performing the validation
+// differently.
 func (p *Participant) deriveInterpolatingValue(xi uint64, L []uint64) *big.Int {
 	// From [FROST]:
 	//
@@ -254,8 +357,6 @@ func (p *Participant) deriveInterpolatingValue(xi uint64, L []uint64) *big.Int {
 	//       x-coordinate is represented more than once in L.
 	//
 	//   def derive_interpolating_value(L, x_i):
-
-	// Note that the validation is handled in validateGroupCommitment function.
 
 	order := p.ciphersuite.Curve().Order()
 	// numerator = Scalar(1)
