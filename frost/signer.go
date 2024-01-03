@@ -39,11 +39,11 @@ func NewSigner(
 }
 
 // Round1 implements the Round One - Commitment phase from [FROST], section
-// 5.1.  Round One - Commitment.
+// 5.1. Round One - Commitment.
 func (s *Signer) Round1() (*Nonce, *NonceCommitment, error) {
 	//	From [FROST]:
 	//
-	//	5.1.  Round One - Commitment
+	//	5.1. Round One - Commitment
 	//
 	//	  Round one involves each participant generating nonces and their
 	//	  corresponding public commitments.  A nonce is a pair of Scalar
@@ -160,7 +160,7 @@ func (s *Signer) validateGroupCommitments(
 ) ([]error, []uint64) {
 	// Validations required, as specified in [FROST]:
 	//
-	// 3.1 Prime-Order Group
+	// 3.1. Prime-Order Group
 	//
 	//   (...)
 	//
