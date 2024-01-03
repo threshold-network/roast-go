@@ -101,7 +101,7 @@ func (s *Signer) Round2(
 	nonce *Nonce,
 	commitments []*NonceCommitment,
 ) (*big.Int, error) {
-	// TODO: validate number of commitments?
+	// TODO: validate the number of commitments
 
 	// participant_list = participants_from_commitment_list(commitment_list)
 	validationErrors, participants := s.validateGroupCommitments(commitments)
@@ -136,9 +136,8 @@ func (s *Signer) Round2(
 	return sigShare, nil
 }
 
-// validateGroupCommitments is a helper function used internally by
-// encodeGroupCommitment to validate the group commitments. Four validations
-// are done:
+// validateGroupCommitments is a helper function used internally in RoundTwo
+// to validate the group commitments. Four validations are done:
 // - None of the commitments is a point not lying on the curve.
 // - The list of commitments is sorted in ascending order by signer identifier.
 // - This signer's commitment is included in the commitments.
@@ -161,7 +160,15 @@ func (s *Signer) validateGroupCommitments(
 	//   buf of fixed length Ne.  This function raises an error if A is the
 	//   identity element of the group.
 	//
-	// 4.3.  List Operations
+	// 4.2. Polynomials
+	//
+	//   (...)
+	//
+	//   Errors:
+	//    - "invalid parameters", if 1) x_i is not in L, or if 2) any
+	//      x-coordinate is represented more than once in L.
+	//
+	// 4.3. List Operations
 	//
 	//   (...)
 	//
