@@ -322,12 +322,8 @@ func createSigners(t *testing.T) []*Signer {
 	secretKeyShare := new(big.Int).SetBytes(buf)
 
 	for i := 1; i <= groupSize; i++ {
-		signer := &Signer{
-			ciphersuite:    ciphersuite,
-			signerIndex:    uint64(i),
-			secretKeyShare: secretKeyShare,
-		}
-
+		// TODO: pass real public key instead of nil
+		signer := NewSigner(ciphersuite, uint64(i), nil, secretKeyShare)
 		signers = append(signers, signer)
 	}
 
