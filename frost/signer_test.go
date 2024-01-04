@@ -3,7 +3,9 @@ package frost
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"math/big"
+	"slices"
 	"testing"
 
 	"threshold.network/roast/internal/testutils"
@@ -15,64 +17,174 @@ var groupSize = 100
 func TestRound2_ValidationError(t *testing.T) {
 	// just a basic test checking if Round2 calls validateGroupCommitments
 	signers := createSigners(t)
-	_, commitments := executeRound1(t, signers)
+	nonces, commitments := executeRound1(t, signers)
 	commitments[0].bindingNonceCommitment = &Point{big.NewInt(99), big.NewInt(88)}
 
 	signer := signers[1]
+	nonce := nonces[1]
 
-	_, err := signer.Round2([]byte("dummy"), commitments)
+	_, err := signer.Round2([]byte("dummy"), nonce, commitments)
 	if err == nil {
 		t.Fatalf("expected a non-nil error")
 	}
+
 	// assert if this is indeed a validation error
 	expectedError := "binding nonce commitment from signer [1] is not a valid non-identity point on the curve: [Point[X=0x63, Y=0x58]]"
 	testutils.AssertStringsEqual(t, "validation error", expectedError, err.Error())
 }
 
 func TestValidateGroupCommitments(t *testing.T) {
+	// happy path
 	signers := createSigners(t)
 	_, commitments := executeRound1(t, signers)
 
 	signer := signers[0]
 
-	validationErrors := signer.validateGroupCommitments(commitments)
+	validationErrors, participants := signer.validateGroupCommitments(commitments)
 	testutils.AssertIntsEqual(t, "number of validation errors", 0, len(validationErrors))
+	testutils.AssertIntsEqual(t, "number of participants", groupSize, len(participants))
+
+	for i, p := range participants {
+		expected := uint64(i + 1)
+		if p != expected {
+			testutils.AssertUintsEqual(t, "participant index", expected, p)
+		}
+	}
 }
 
 func TestValidateGroupCommitments_Errors(t *testing.T) {
-	signers := createSigners(t)
-	_, commitments := executeRound1(t, signers)
+	tests := map[string]struct {
+		modifyCommitments func([]*NonceCommitment) []*NonceCommitment
+		expectedErrors    []string
+	}{
+		"nil in the array": {
+			modifyCommitments: func(commitments []*NonceCommitment) []*NonceCommitment {
+				commitments[30] = nil
+				return commitments
+			},
+			expectedErrors: []string{
+				"commitment at position [30] is nil",
+			},
+		},
+		"commitment from the current signer is missing": {
+			modifyCommitments: func(commitments []*NonceCommitment) []*NonceCommitment {
+				// the test uses signers[0] so let remove commitment from this signer
+				return slices.Delete(commitments, 0, 1)
+			},
+			expectedErrors: []string{
+				"current signer's commitment not found on the list",
+			},
+		},
+		"duplicate commitment": {
+			modifyCommitments: func(commitments []*NonceCommitment) []*NonceCommitment {
+				// duplicate commitment from signer 5 at positions 4 and 5
+				commitments[5] = commitments[4]
+				return commitments
+			},
+			expectedErrors: []string{
+				"commitments not sorted in ascending order: commitments[4].signerIndex=5, commitments[5].signerIndex=5",
+			},
+		},
+		"commitments in invalid order": {
+			modifyCommitments: func(commitments []*NonceCommitment) []*NonceCommitment {
+				// at the position where we'd expect a commitment from signer 32 we have
+				// a commitment from signer 51
+				tmp := commitments[31]
+				commitments[31] = commitments[50]
+				// at the position where we'd expect a commitment from signer 51 we have
+				// a commitment from signer 32
+				commitments[50] = tmp
+				return commitments
+			},
+			expectedErrors: []string{
+				"commitments not sorted in ascending order: commitments[31].signerIndex=51, commitments[32].signerIndex=33",
+				"commitments not sorted in ascending order: commitments[49].signerIndex=50, commitments[50].signerIndex=32",
+			},
+		},
+		"invalid binding nonce commitment": {
+			modifyCommitments: func(commitments []*NonceCommitment) []*NonceCommitment {
+				// binding nonce commitment for signer 81 is an invalid curve point
+				commitments[80].bindingNonceCommitment = &Point{big.NewInt(100), big.NewInt(200)}
+				return commitments
+			},
+			expectedErrors: []string{
+				"binding nonce commitment from signer [81] is not a valid non-identity point on the curve: [Point[X=0x64, Y=0xc8]]",
+			},
+		},
+		"invalid hiding nonce commitment": {
+			modifyCommitments: func(commitments []*NonceCommitment) []*NonceCommitment {
+				// hiding nonce commitment for signer 100 is an invalid curve point
+				commitments[99].hidingNonceCommitment = &Point{big.NewInt(300), big.NewInt(400)}
+				return commitments
+			},
+			expectedErrors: []string{
+				"hiding nonce commitment from signer [100] is not a valid non-identity point on the curve: [Point[X=0x12c, Y=0x190]]",
+			},
+		},
+		"multiple problems": {
+			modifyCommitments: func(commitments []*NonceCommitment) []*NonceCommitment {
+				// the test uses signers[0] so let remove commitment from this signer
+				modified := slices.Delete(commitments, 0, 1)
+				// duplicate commitment from signer 6 at positions 4 and 5
+				modified[5] = modified[4]
+				// at the position where we'd expect a commitment from signer 33 we have
+				// a commitment from signer 52
+				tmp := modified[31]
+				modified[31] = modified[50]
+				// at the position where we'd expect a commitment from signer 52 we have
+				// a commitment from signer 33
+				modified[50] = tmp
+				// binding nonce commitment for signer 82 is an invalid curve point
+				modified[80].bindingNonceCommitment = &Point{big.NewInt(100), big.NewInt(200)}
+				// hiding nonce commitment for signer 100 is an invalid curve point
+				modified[98].hidingNonceCommitment = &Point{big.NewInt(300), big.NewInt(400)}
+				// finally, we'll set the nil commitment at position 97 where we would
+				// expect a commitment from signer 99
+				modified[97] = nil
+				return modified
+			},
+			expectedErrors: []string{
+				"commitments not sorted in ascending order: commitments[4].signerIndex=6, commitments[5].signerIndex=6",
+				"commitments not sorted in ascending order: commitments[31].signerIndex=52, commitments[32].signerIndex=34",
+				"commitments not sorted in ascending order: commitments[49].signerIndex=51, commitments[50].signerIndex=33",
+				"binding nonce commitment from signer [82] is not a valid non-identity point on the curve: [Point[X=0x64, Y=0xc8]]",
+				"commitment at position [97] is nil",
+				"hiding nonce commitment from signer [100] is not a valid non-identity point on the curve: [Point[X=0x12c, Y=0x190]]",
+				"current signer's commitment not found on the list",
+			},
+		},
+	}
 
-	// duplicate commitment from signer 5 at positions 4 and 5
-	commitments[5] = commitments[4]
-	// at the position where we'd expect a commitment from signer 32 we have
-	// a commitment from signer 51
-	tmp := commitments[31]
-	commitments[31] = commitments[50]
-	// at the position where we'd expect a commitment from signer 51 we have
-	// a commitment from signer 32
-	commitments[50] = tmp
-	// binding nonce commitment for signer 81 is an invalid curve point
-	commitments[80].bindingNonceCommitment = &Point{big.NewInt(100), big.NewInt(200)}
-	// hiding nonce commitment for signer 100 is an invalid curve point
-	commitments[99].hidingNonceCommitment = &Point{big.NewInt(300), big.NewInt(400)}
+	for testName, test := range tests {
+		t.Run(testName, func(t *testing.T) {
+			signers := createSigners(t)
+			_, commitments := executeRound1(t, signers)
+			signer := signers[0]
 
-	signer := signers[0]
+			modified := test.modifyCommitments(commitments)
+			validationErrors, participants := signer.validateGroupCommitments(modified)
 
-	validationErrors := signer.validateGroupCommitments(commitments)
+			if participants != nil {
+				t.Fatalf("expected nil participants list, has [%v]", participants)
+			}
 
-	expectedError1 := "commitments not sorted in ascending order: commitments[4].signerIndex=5, commitments[5].signerIndex=5"
-	expectedError2 := "commitments not sorted in ascending order: commitments[31].signerIndex=51, commitments[32].signerIndex=33"
-	expectedError3 := "commitments not sorted in ascending order: commitments[49].signerIndex=50, commitments[50].signerIndex=32"
-	expectedError4 := "binding nonce commitment from signer [81] is not a valid non-identity point on the curve: [Point[X=0x64, Y=0xc8]]"
-	expectedError5 := "hiding nonce commitment from signer [100] is not a valid non-identity point on the curve: [Point[X=0x12c, Y=0x190]]"
+			testutils.AssertIntsEqual(
+				t,
+				"number of validation errors",
+				len(test.expectedErrors),
+				len(validationErrors),
+			)
 
-	testutils.AssertIntsEqual(t, "number of validation errors", 5, len(validationErrors))
-	testutils.AssertStringsEqual(t, "validation error #1", expectedError1, validationErrors[0].Error())
-	testutils.AssertStringsEqual(t, "validation error #2", expectedError2, validationErrors[1].Error())
-	testutils.AssertStringsEqual(t, "validation error #3", expectedError3, validationErrors[2].Error())
-	testutils.AssertStringsEqual(t, "validation error #4", expectedError4, validationErrors[3].Error())
-	testutils.AssertStringsEqual(t, "validation error #5", expectedError5, validationErrors[4].Error())
+			for i, expectedError := range test.expectedErrors {
+				testutils.AssertStringsEqual(
+					t,
+					fmt.Sprintf("validation error #%d", i),
+					expectedError,
+					validationErrors[i].Error(),
+				)
+			}
+		})
+	}
 }
 
 func TestEncodeGroupCommitments(t *testing.T) {
@@ -187,50 +299,12 @@ func TestDeriveInterpolatingValue(t *testing.T) {
 	signer := createSigners(t)[0]
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			result, err := signer.deriveInterpolatingValue(test.xi, test.L)
-			if err != nil {
-				t.Fatal(err)
-			}
+			result := signer.deriveInterpolatingValue(test.xi, test.L)
 			testutils.AssertStringsEqual(
 				t,
 				"interpolating value",
 				test.expected,
 				result.Text(10),
-			)
-		})
-	}
-}
-
-func TestDeriveInterpolatingValue_InvalidParameters(t *testing.T) {
-	var tests = map[string]struct {
-		xi          uint64
-		L           []uint64
-		expectedErr string
-	}{
-		"xi present more than one time in L": {
-			xi:          5,
-			L:           []uint64{1, 4, 5, 5},
-			expectedErr: "invalid parameters: xi=[5] present more than one time in L=[[1 4 5 5]]",
-		},
-		"xi not present in L": {
-			xi:          3,
-			L:           []uint64{1, 4, 5},
-			expectedErr: "invalid parameters: xi=[3] not present in L=[[1 4 5]]",
-		},
-	}
-
-	signer := createSigners(t)[0]
-	for testName, test := range tests {
-		t.Run(testName, func(t *testing.T) {
-			_, err := signer.deriveInterpolatingValue(test.xi, test.L)
-			if err == nil {
-				t.Fatalf("expected a non-nil error")
-			}
-			testutils.AssertStringsEqual(
-				t,
-				"parameters error",
-				test.expectedErr,
-				err.Error(),
 			)
 		})
 	}

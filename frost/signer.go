@@ -94,22 +94,64 @@ func (s *Signer) generateNonce(secret []byte) (*big.Int, error) {
 	return s.ciphersuite.H3(b, secret), nil
 }
 
-func (s *Signer) Round2(message []byte, commitments []*NonceCommitment) (*big.Int, error) {
-	validationErrors := s.validateGroupCommitments(commitments)
+// Round2 implements the Round Two - Signature Share Generation phase from
+// [FROST], section 5.2 Round Two - Signature Share Generation.
+func (s *Signer) Round2(
+	message []byte,
+	nonce *Nonce,
+	commitments []*NonceCommitment,
+) (*big.Int, error) {
+	// TODO: validate number of commitments?
+
+	// participant_list = participants_from_commitment_list(commitment_list)
+	validationErrors, participants := s.validateGroupCommitments(commitments)
 	if len(validationErrors) != 0 {
 		return nil, errors.Join(validationErrors...)
 	}
 
-	return nil, nil // TODO: return signature share
+	// binding_factor_list = compute_binding_factors(group_public_key, commitment_list, msg)
+	bindingFactors := s.computeBindingFactors(message, commitments)
+	// binding_factor = binding_factor_for_participant(binding_factor_list, identifier)
+	bindingFactor := bindingFactors[s.signerIndex]
+
+	// group_commitment = compute_group_commitment(commitment_list, binding_factor_list)
+	groupCommitment := s.computeGroupCommitment(commitments, bindingFactors)
+
+	// lambda_i = derive_interpolating_value(participant_list, identifier)
+	lambda := s.deriveInterpolatingValue(s.signerIndex, participants)
+
+	// challenge = compute_challenge(group_commitment, group_public_key, msg)
+	challenge := s.computeChallenge(message, groupCommitment)
+
+	bnbf := new(big.Int).Mul(nonce.bindingNonce, bindingFactor) // (binding_nonce * binding_factor)
+	lski := new(big.Int).Mul(lambda, s.secretKeyShare)          // lambda_i * sk_i
+	lskic := new(big.Int).Mul(lski, challenge)                  // (lambda_i * sk_i * challenge)
+
+	// sig_share = hiding_nonce + (binding_nonce * binding_factor) + (lambda_i * sk_i * challenge)
+	sigShare := new(big.Int).Add(
+		nonce.hidingNonce,
+		new(big.Int).Add(bnbf, lskic),
+	)
+
+	return sigShare, nil
 }
 
 // validateGroupCommitments is a helper function used internally by
-// encodeGroupCommitment to validate the group commitments. Two validations are
-// done:
+// encodeGroupCommitment to validate the group commitments. Four validations
+// are done:
 // - None of the commitments is a point not lying on the curve.
 // - The list of commitments is sorted in ascending order by signer identifier.
-func (s *Signer) validateGroupCommitments(commitments []*NonceCommitment) []error {
-	// From [FROST]:
+// - This signer's commitment is included in the commitments.
+// - None of the commitments is nil.
+//
+// Additionally, the function returns the list of participants if there were no
+// validation errors. This way, the function implements
+// def participants_from_commitment_list(commitment_list) function from [FROST]
+// section 4.3. List Operations.
+func (s *Signer) validateGroupCommitments(
+	commitments []*NonceCommitment,
+) ([]error, []uint64) {
+	// Validations required, as specified in [FROST]:
 	//
 	// 3.1 Prime-Order Group
 	//
@@ -129,19 +171,31 @@ func (s *Signer) validateGroupCommitments(commitments []*NonceCommitment) []erro
 	//	 NonZeroScalar identifier i and two commitment Element values
 	//	 (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
 	//	 MUST be sorted in ascending order by identifier.
+
+	participants := make([]uint64, len(commitments))
 	var errors []error
 
 	curve := s.ciphersuite.Curve()
+
+	found := false
 
 	// we index from 1 so this number will always be lower
 	lastSignerIndex := uint64(0)
 
 	for i, c := range commitments {
+		if c == nil {
+			errors = append(
+				errors,
+				fmt.Errorf("commitment at position [%d] is nil", i),
+			)
+			continue
+		}
+
 		if c.signerIndex <= lastSignerIndex {
 			errors = append(
 				errors, fmt.Errorf(
 					"commitments not sorted in ascending order: "+
-						"commitments[%v].signerIndex=%v, commitments[%v].signerIndex=%v",
+						"commitments[%d].signerIndex=%d, commitments[%d].signerIndex=%d",
 					i-1,
 					lastSignerIndex,
 					i,
@@ -151,10 +205,15 @@ func (s *Signer) validateGroupCommitments(commitments []*NonceCommitment) []erro
 		}
 
 		lastSignerIndex = c.signerIndex
+		participants[i] = c.signerIndex
+
+		if c.signerIndex == s.signerIndex {
+			found = true
+		}
 
 		if !curve.IsPointOnCurve(c.bindingNonceCommitment) {
 			errors = append(errors, fmt.Errorf(
-				"binding nonce commitment from signer [%v] is not a valid "+
+				"binding nonce commitment from signer [%d] is not a valid "+
 					"non-identity point on the curve: [%s]",
 				c.signerIndex,
 				c.bindingNonceCommitment,
@@ -163,7 +222,7 @@ func (s *Signer) validateGroupCommitments(commitments []*NonceCommitment) []erro
 
 		if !curve.IsPointOnCurve(c.hidingNonceCommitment) {
 			errors = append(errors, fmt.Errorf(
-				"hiding nonce commitment from signer [%v] is not a valid "+
+				"hiding nonce commitment from signer [%d] is not a valid "+
 					"non-identity point on the curve: [%s]",
 				c.signerIndex,
 				c.hidingNonceCommitment,
@@ -171,7 +230,19 @@ func (s *Signer) validateGroupCommitments(commitments []*NonceCommitment) []erro
 		}
 	}
 
-	return errors
+	if !found {
+		errors = append(
+			errors,
+			fmt.Errorf("current signer's commitment not found on the list"),
+		)
+	}
+
+	// return participants only when there were no validation errors
+	if len(errors) == 0 {
+		return nil, participants
+	}
+
+	return errors, nil
 }
 
 // computeBindingFactors implements def compute_binding_factors(group_public_key,
@@ -182,8 +253,8 @@ func (s *Signer) validateGroupCommitments(commitments []*NonceCommitment) []erro
 // commitments have been received and call validateGroupCommitment to validate
 // the received commitments.
 func (s *Signer) computeBindingFactors(
-	commitments []*NonceCommitment,
 	message []byte,
+	commitments []*NonceCommitment,
 ) bindingFactors {
 	// From [FROST]:
 	//
@@ -369,7 +440,11 @@ func (s *Signer) encodeGroupCommitment(commitments []*NonceCommitment) []byte {
 // function from [FROST], as defined in section 4.2 Polynomials.
 // L is the list of the indices of the members of the particular group.
 // xi is the index of the participant i.
-func (s *Signer) deriveInterpolatingValue(xi uint64, L []uint64) (*big.Int, error) {
+//
+// The function calling deriveInterpolatingValue must ensure a valid number of
+// commitments have been received and call validateGroupCommitment to validate
+// the received commitments.
+func (s *Signer) deriveInterpolatingValue(xi uint64, L []uint64) *big.Int {
 	// From [FROST]:
 	//
 	// 4.2.  Polynomials
@@ -399,8 +474,9 @@ func (s *Signer) deriveInterpolatingValue(xi uint64, L []uint64) (*big.Int, erro
 	//
 	//   def derive_interpolating_value(L, x_i):
 
+	// Note that the validation is handled in validateGroupCommitment function.
+
 	order := s.ciphersuite.Curve().Order()
-	found := false
 	// numerator = Scalar(1)
 	num := big.NewInt(1)
 	// denominator = Scalar(1)
@@ -408,17 +484,6 @@ func (s *Signer) deriveInterpolatingValue(xi uint64, L []uint64) (*big.Int, erro
 	// for x_j in L:
 	for _, xj := range L {
 		if xj == xi {
-			// for x_j in L:
-			//     if count(x_j, L) > 1:
-			//         raise "invalid parameters"
-			if found {
-				return nil, fmt.Errorf(
-					"invalid parameters: xi=[%v] present more than one time in L=[%v]",
-					xi,
-					L,
-				)
-			}
-			found = true
 			// if x_j == x_i: continue
 			continue
 		}
@@ -430,21 +495,48 @@ func (s *Signer) deriveInterpolatingValue(xi uint64, L []uint64) (*big.Int, erro
 		den.Mod(den, order)
 	}
 
-	// if x_i not in L:
-	//     raise "invalid parameters"
-	if !found {
-		return nil, fmt.Errorf(
-			"invalid parameters: xi=[%v] not present in L=[%v]",
-			xi,
-			L,
-		)
-	}
-
 	// value = numerator / denominator
 	denInv := new(big.Int).ModInverse(den, order)
 	res := new(big.Int).Mul(num, denInv)
 	res = res.Mod(res, order)
 
 	// return value
-	return res, nil
+	return res
+}
+
+// computeChallenge implements def compute_group_commitment(commitment_list,
+// binding_factor_list) from [FROST] as defined in section 4.6. Signature
+// Challenge Computation.
+func (s *Signer) computeChallenge(
+	message []byte,
+	groupCommitment *Point,
+) *big.Int {
+
+	// From [FROST]:
+	//
+	// 4.6.  Signature Challenge Computation
+	//
+	//   This section describes the subroutine for creating the per-message
+	//   challenge.
+	//
+	//   Inputs:
+	//     - group_commitment, the group commitment, an Element.
+	//     - group_public_key, the public key corresponding to the group signing
+	//       key, an Element.
+	//     - msg, the message to be signed, a byte string.
+	//
+	//   Outputs:
+	//     - challenge, a Scalar.
+	//
+	// def compute_group_commitment(commitment_list, binding_factor_list)
+
+	curve := s.ciphersuite.Curve()
+	// group_comm_enc = G.SerializeElement(group_commitment)
+	groupCommitmentEncoded := curve.SerializePoint(groupCommitment)
+	// group_public_key_enc = G.SerializeElement(group_public_key)
+	publicKeyEncoded := curve.SerializePoint(s.publicKey)
+	// challenge_input = group_comm_enc || group_public_key_enc || msg
+	// challenge = H2(challenge_input)
+	// return challenge
+	return s.ciphersuite.H2(groupCommitmentEncoded, publicKeyEncoded, message)
 }
