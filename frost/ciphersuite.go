@@ -13,6 +13,18 @@ import (
 type Ciphersuite interface {
 	Hashing
 	Curve() Curve
+
+	// EncodePoint encodes the given elliptic curve point to a byte slice in
+	// a way that is *specific* to the given ciphersuite needs. This is
+	// especially important when calculating a signature challenge in [FROST].
+	//
+	// This function may yield a different result than SerializePoint function
+	// from the Curve interface. While the SerializePoint result should be
+	// considered an internal serialization that may be optimized for speed or
+	// data consistency, the EncodePoint result should be considered an external
+	// serialization, always reflecting the given ciphersuite's specification
+	// requirements.
+	EncodePoint(point *Point) []byte
 }
 
 // Hashing interface abstracts out hash functions implementations specific to the
@@ -22,6 +34,10 @@ type Ciphersuite interface {
 // generically written as H. Using H, [FROST] introduces distinct domain-separated
 // hashes, H1, H2, H3, H4, and H5. The details of H1, H2, H3, H4, and H5 vary
 // based on ciphersuite.
+//
+// Note that for some of those functions it may be important to use a specific
+// encoding of elliptic curve points depending on the ciphersuite being
+// implemented.
 type Hashing interface {
 	H1(m []byte) *big.Int
 	H2(m []byte, ms ...[]byte) *big.Int
@@ -42,6 +58,9 @@ type Curve interface {
 
 	// EcAdd returns the sum of two elliptic curve points.
 	EcAdd(*Point, *Point) *Point
+
+	// EcSub returns the subtraction of two elliptic curve points.
+	EcSub(*Point, *Point) *Point
 
 	// Identity returns elliptic curve identity element.
 	Identity() *Point
@@ -90,4 +109,13 @@ type Point struct {
 // in logging.
 func (p *Point) String() string {
 	return fmt.Sprintf("Point[X=0x%v, Y=0x%v]", p.X.Text(16), p.Y.Text(16))
+}
+
+// Signature represents a Schnorr signature produced by [FROST] protocol as
+// a result of the signature share aggregation. Note that the signature produced
+// by the signature share aggregation in [FROST] may not be valid if there are
+// malicious signers present.
+type Signature struct {
+	R *Point   // R in [FROST] appendix C
+	Z *big.Int // z in [FROST] appendix C
 }
