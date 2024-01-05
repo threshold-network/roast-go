@@ -2,6 +2,8 @@ package frost
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -402,6 +404,103 @@ func TestBip340CiphersuiteHash(t *testing.T) {
 			hash := ciphersuite.hash(test.tag, test.msg)
 			if bytes.Equal(hash[:], empty) {
 				t.Fatal("empty bytes")
+			}
+		})
+	}
+}
+
+func TestVerifySignature(t *testing.T) {
+	tests := []struct {
+		signature   string
+		publicKeyX  string
+		message     string
+		isValid     bool
+		expectedErr string
+	}{
+		{
+			signature:  "E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA821525F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0",
+			publicKeyX: "F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9",
+			message:    "0000000000000000000000000000000000000000000000000000000000000000",
+			isValid:    true,
+		},
+		{
+			signature:  "6896BD60EEAE296DB48A229FF71DFE071BDE413E6D43F917DC8DCF8C78DE33418906D11AC976ABCCB20B091292BFF4EA897EFCB639EA871CFA95F6DE339E4B0A",
+			publicKeyX: "DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659",
+			message:    "243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89",
+			isValid:    true,
+		},
+		{
+			signature:  "5831AAEED7B44BB74E5EAB94BA9D4294C49BCF2A60728D8B4C200F50DD313C1BAB745879A5AD954A72C45A91C3A51D3C7ADEA98D82F8481E0E1E03674A6F3FB7",
+			publicKeyX: "DD308AFEC5777E13121FA72B9CC1B7CC0139715309B086C960E18FD969774EB8",
+			message:    "7E2D58D8B3BCDF1ABADEC7829054F90DDA9805AAB56C77333024B9D0A508B75C",
+			isValid:    true,
+		},
+		{
+			signature:  "7EB0509757E246F19449885651611CB965ECC1A187DD51B64FDA1EDC9637D5EC97582B9CB13DB3933705B32BA982AF5AF25FD78881EBB32771FC5922EFC66EA3",
+			publicKeyX: "25D1DFF95105F5253C4022F628A996AD3A0D95FBF21D468A1B33F8C160D8F517",
+			message:    "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+			isValid:    true,
+		},
+		{
+			signature:  "00000000000000000000003B78CE563F89A0ED9414F5AA28AD0D96D6795F9C6376AFB1548AF603B3EB45C9F8207DEE1060CB71C04E80F593060B07D28308D7F4",
+			publicKeyX: "D69C3509BB99E412E68B0FE8544E72837DFA30746D8BE2AA65975F29D22DC7B9",
+			message:    "4DF3C3F68FCC83B27E9D42C90431A72499F17875C81A599B566C9889B9696703",
+			isValid:    true,
+		},
+		// TODO: add the remaining BIP-340 test vectors
+		// https://github.com/bitcoin/bips/blob/master/bip-0340/test-vectors.csv
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("test case %v", i), func(t *testing.T) {
+			sigBytes, err := hex.DecodeString(test.signature)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			pubKeyXBytes, err := hex.DecodeString(test.publicKeyX)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			msg, err := hex.DecodeString(test.message)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			signature := &Signature{
+				R: &Point{
+					X: new(big.Int).SetBytes(sigBytes[0:32]),
+					Y: nil, // TODO: fix it
+				},
+				Z: new(big.Int).SetBytes(sigBytes[32:64]),
+			}
+
+			pubKey := &Point{
+				X: new(big.Int).SetBytes(pubKeyXBytes),
+				Y: nil, // TODO: fix it
+			}
+
+			ciphersuite = NewBip340Ciphersuite()
+			res, err := ciphersuite.VerifySignature(signature, pubKey, msg)
+
+			testutils.AssertBoolsEqual(
+				t,
+				"signature verification result",
+				test.isValid,
+				res,
+			)
+
+			if !test.isValid {
+				if err == nil {
+					t.Fatal("expected not-nil error")
+				}
+				testutils.AssertStringsEqual(
+					t,
+					"signature verification error message",
+					test.expectedErr,
+					err.Error(),
+				)
 			}
 		})
 	}
