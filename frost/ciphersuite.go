@@ -94,3 +94,12 @@ type Point struct {
 func (p *Point) String() string {
 	return fmt.Sprintf("Point[X=0x%v, Y=0x%v]", p.X.Text(16), p.Y.Text(16))
 }
+
+// Signature represents a Schnorr signature produced by [FROST] protocol as
+// a result of the signature share aggregation. Note that the signature produced
+// by the signature share aggregation in [FROST] may not be valid if there are
+// malicious signers present.
+type Signature struct {
+	R *Point   // R in [FROST] appendix C
+	Z *big.Int // z in [FROST] appendix C
+}

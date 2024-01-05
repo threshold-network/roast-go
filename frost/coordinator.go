@@ -12,11 +12,14 @@ type Coordinator struct {
 
 // Aggregate implements Signature Share Aggregation from [FROST], section
 // 5.3. Signature Share Aggregation.
+//
+// Note that the signature produced by the signature share aggregation in
+// [FROST] may not be valid if there are malicious signers present.
 func (c *Coordinator) Aggregate(
 	message []byte,
 	commitments []*NonceCommitment,
 	signatureShares []*big.Int,
-) (*Point, *big.Int, error) {
+) (*Signature, error) {
 	// From [FROST]:
 	//
 	// 5.3.  Signature Share Aggregation
@@ -52,7 +55,7 @@ func (c *Coordinator) Aggregate(
 
 	validationErrors, _ := c.validateGroupCommitmentsBase(commitments)
 	if len(validationErrors) != 0 {
-		return nil, nil, errors.Join(validationErrors...)
+		return nil, errors.Join(validationErrors...)
 	}
 
 	// binding_factor_list = compute_binding_factors(group_public_key, commitment_list, msg)
@@ -74,5 +77,5 @@ func (c *Coordinator) Aggregate(
 	}
 
 	// return (group_commitment, z)
-	return groupCommitment, z, nil
+	return &Signature{groupCommitment, z}, nil
 }
