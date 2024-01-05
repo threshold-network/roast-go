@@ -13,6 +13,18 @@ import (
 type Ciphersuite interface {
 	Hashing
 	Curve() Curve
+
+	// EncodePoint encodes the given elliptic curve point to a byte slice in
+	// a way that is *specific* to the given ciphersuite needs. This is
+	// especially important when calculating a signature challenge in [FROST].
+	//
+	// This function may yield a different result than SerializePoint function
+	// from the Curve interface. While the SerializePoint result should be
+	// considered an internal serialization that may be optimized for speed or
+	// data consistency, the EncodePoint result should be considered an external
+	// serialization, always reflecting the given ciphersuite's specification
+	// requirements.
+	EncodePoint(point *Point) []byte
 }
 
 // Hashing interface abstracts out hash functions implementations specific to the
@@ -22,6 +34,10 @@ type Ciphersuite interface {
 // generically written as H. Using H, [FROST] introduces distinct domain-separated
 // hashes, H1, H2, H3, H4, and H5. The details of H1, H2, H3, H4, and H5 vary
 // based on ciphersuite.
+//
+// Note that for some of those functions it may be important to use a specific
+// encoding of elliptic curve points depending on the ciphersuite being
+// implemented.
 type Hashing interface {
 	H1(m []byte) *big.Int
 	H2(m []byte, ms ...[]byte) *big.Int

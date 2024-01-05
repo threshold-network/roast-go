@@ -197,6 +197,22 @@ func (b *Bip340Ciphersuite) hash(tag, msg []byte) [32]byte {
 	return hashed
 }
 
+// EncodePoint encodes the given elliptic curve point to a byte slice in a way
+// that is *specific* to [BIP-340] needs.
+//
+// This function yields a different result than SerializePoint function from the
+// Curve interface. The SerializePoint serializes both X and Y coordinates,
+// while EncodePoint serializes just X coordinate, as it is expected by
+// [BIP-340] for the challenge computation. The way SerializePoint works allows
+// to avoid computing Y coordinate manually when exchanging data. The way
+// EncodePoint works is dictated by [BIP-340] specification.
+func (b *Bip340Ciphersuite) EncodePoint(point *Point) []byte {
+	xMod := new(big.Int).Mod(point.X, b.curve.P)
+	xbs := make([]byte, 32)
+	xMod.FillBytes(xbs)
+	return xbs
+}
+
 // concat performs a concatenation of byte slices without the modification of
 // the slices passed as parameters. A brand new slice instance is always
 // returned from the function.

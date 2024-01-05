@@ -412,11 +412,10 @@ func (p *Participant) computeChallenge(
 	//
 	// def compute_group_commitment(commitment_list, binding_factor_list)
 
-	curve := p.ciphersuite.Curve()
 	// group_comm_enc = G.SerializeElement(group_commitment)
-	groupCommitmentEncoded := curve.SerializePoint(groupCommitment)
+	groupCommitmentEncoded := p.ciphersuite.EncodePoint(groupCommitment)
 	// group_public_key_enc = G.SerializeElement(group_public_key)
-	publicKeyEncoded := curve.SerializePoint(p.publicKey)
+	publicKeyEncoded := p.ciphersuite.EncodePoint(p.publicKey)
 	// challenge_input = group_comm_enc || group_public_key_enc || msg
 	// challenge = H2(challenge_input)
 	// return challenge
