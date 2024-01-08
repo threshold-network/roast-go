@@ -220,24 +220,49 @@ func (b *Bip340Ciphersuite) EncodePoint(point *Point) []byte {
 // signature is invalid. The error provides a detailed explanation on why the
 // signature verification failed.
 //
-// VerifySignature implements Verify(pk, m, sig) function as defined in [BIP-340].
+// VerifySignature implements Verify(pk, m, sig) function defined in [BIP-340].
 func (b *Bip340Ciphersuite) VerifySignature(
 	signature *Signature,
 	publicKey *Point,
 	message []byte,
 ) (bool, error) {
+	// This function accepts the public key as an elliptic curve point and
+	// signature as a structure outputted as defined in [FROST] aggregate
+	// function. This is not precisely how [BIP-340] defines the verification
+	// function signature. From [BIP-340]:
+	//
+	// "Note that the correctness of verification relies on the fact that lift_x
+	// always returns a point with an even Y coordinate. A hypothetical
+	// verification algorithm that treats points as public keys, and takes the
+	// point P directly as input would fail any time a point with odd Y is used.
+	// While it is possible to correct for this by negating points with odd Y
+	// coordinate before further processing, this would result in a scheme where
+	// every (message, signature) pair is valid for two public keys (a type of
+	// malleability that exists for ECDSA as well, but we don't wish to retain).
+	// We avoid these problems by treating just the X coordinate as public key."
+	//
+	// In our specific case, we define FROST ciphersuite that will operate on
+	// the same types as the [FROST] algorithm. This is a requirement to make
+	// the ciphersuite used generic for [FROST].
+	//
+	// Accepting the public key as a point and signature as a struct outputted
+	// from the aggregate function makes the code easier to follow as no
+	// conversions have to be made before the verification. Also, from our
+	// specific perspective, it does not make a difference where the conversion
+	// is made and where we strip the public key's Y coordinate information:
+	// between the aggregation and before the verification or inside the
+	// verification. For a more generic case where we would validate [BIP-340]
+	// signatures from Bitcoin chain, it would make more sense to strip Y
+	// coordinate before calling this function.
+
 	// Not required by [BIP-340] but performed to ensure input data consistency.
 	// We do not want to return true if Y is an invalid coordinate.
-	/*
-		// TODO: check if not nil coordinates
-
-		if !b.curve.IsOnCurve(signature.R.X, signature.R.Y) {
-			return false, fmt.Errorf("signature.R is not on the curve")
-		}
-		if !b.curve.IsOnCurve(publicKey.X, publicKey.Y) {
-			return false, fmt.Errorf("publicKey is not on the curve")
-		}
-	*/
+	if !b.curve.IsOnCurve(publicKey.X, publicKey.Y) {
+		return false, fmt.Errorf("point publicKey is infinite")
+	}
+	if publicKey.X.Cmp(b.curve.P) == 1 {
+		return false, fmt.Errorf("point publicKey exceeds field size")
+	}
 
 	// Let P = lift_x(int(pk)); fail if that fails.
 	pk := new(big.Int).SetBytes(b.EncodePoint(publicKey))
