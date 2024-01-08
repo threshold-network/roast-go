@@ -14,18 +14,6 @@ type Ciphersuite interface {
 	Hashing
 	Curve() Curve
 
-	// EncodePoint encodes the given elliptic curve point to a byte slice in
-	// a way that is *specific* to the given ciphersuite needs. This is
-	// especially important when calculating a signature challenge in [FROST].
-	//
-	// This function may yield a different result than SerializePoint function
-	// from the Curve interface. While the SerializePoint result should be
-	// considered an internal serialization that may be optimized for speed or
-	// data consistency, the EncodePoint result should be considered an external
-	// serialization, always reflecting the given ciphersuite's specification
-	// requirements.
-	EncodePoint(point *Point) []byte
-
 	// VerifySignature verifies the provided signature for the message against
 	// the group public key. The function returns true and nil error when the
 	// signature is valid. The function returns false and an error when the
@@ -55,6 +43,18 @@ type Hashing interface {
 	H3(m []byte, ms ...[]byte) *big.Int
 	H4(m []byte) []byte
 	H5(m []byte) []byte
+
+	// EncodePoint encodes the given elliptic curve point to a byte slice in
+	// a way that is *specific* to the given ciphersuite needs. This is
+	// especially important when calculating a signature challenge in [FROST].
+	//
+	// This function may yield a different result than SerializePoint function
+	// from the Curve interface. While the SerializePoint result should be
+	// considered an internal serialization that may be optimized for speed or
+	// data consistency, the EncodePoint result should be considered an external
+	// serialization, always reflecting the given ciphersuite's specification
+	// requirements.
+	EncodePoint(point *Point) []byte
 }
 
 // Curve interface abstracts out the particular elliptic curve implementation
