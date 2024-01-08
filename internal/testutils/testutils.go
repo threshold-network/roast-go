@@ -76,6 +76,19 @@ func AssertStringsEqual(t *testing.T, description string, expected string, actua
 	}
 }
 
+// AssertBoolsEqual checks if two booleans are equal. If not, it reports a test
+// failure.
+func AssertBoolsEqual(t *testing.T, description string, expected bool, actual bool) {
+	if expected != actual {
+		t.Errorf(
+			"unexpected %s\nexpected: %v\nactual:   %v\n",
+			description,
+			expected,
+			actual,
+		)
+	}
+}
+
 func testBytesEqual(expectedBytes []byte, actualBytes []byte) error {
 	minLen := len(expectedBytes)
 	diffCount := 0

@@ -25,6 +25,17 @@ type Ciphersuite interface {
 	// serialization, always reflecting the given ciphersuite's specification
 	// requirements.
 	EncodePoint(point *Point) []byte
+
+	// VerifySignature verifies the provided signature for the message against
+	// the group public key. The function returns true and nil error when the
+	// signature is valid. The function returns false and an error when the
+	// signature is valid. The error provides a detailed explanation on why
+	// the signature verification failed.
+	VerifySignature(
+		signature *Signature,
+		publicKey *Point,
+		message []byte,
+	) (bool, error)
 }
 
 // Hashing interface abstracts out hash functions implementations specific to the

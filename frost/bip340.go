@@ -2,6 +2,7 @@ package frost
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -211,6 +212,120 @@ func (b *Bip340Ciphersuite) EncodePoint(point *Point) []byte {
 	xbs := make([]byte, 32)
 	xMod.FillBytes(xbs)
 	return xbs
+}
+
+// VerifySignature verifies the provided [BIP-340] signature for the message
+// against the group public key. The function returns true and nil error when
+// the signature is valid. The function returns false and an error when the
+// signature is invalid. The error provides a detailed explanation on why the
+// signature verification failed.
+//
+// VerifySignature implements Verify(pk, m, sig) function as defined in [BIP-340].
+func (b *Bip340Ciphersuite) VerifySignature(
+	signature *Signature,
+	publicKey *Point,
+	message []byte,
+) (bool, error) {
+	// Not required by [BIP-340] but performed to ensure input data consistency.
+	// We do not want to return true if Y is an invalid coordinate.
+	/*
+		// TODO: check if not nil coordinates
+
+		if !b.curve.IsOnCurve(signature.R.X, signature.R.Y) {
+			return false, fmt.Errorf("signature.R is not on the curve")
+		}
+		if !b.curve.IsOnCurve(publicKey.X, publicKey.Y) {
+			return false, fmt.Errorf("publicKey is not on the curve")
+		}
+	*/
+
+	// Let P = lift_x(int(pk)); fail if that fails.
+	pk := new(big.Int).SetBytes(b.EncodePoint(publicKey))
+	P, err := b.liftX(pk)
+	if err != nil {
+		return false, fmt.Errorf("liftX failed: [%v]", err)
+	}
+
+	// Let r = int(sig[0:32]); fail if r ≥ p.
+	r := signature.R.X // int(sig[0:32])
+	if r.Cmp(b.curve.P) != -1 {
+		return false, fmt.Errorf("r >= P")
+	}
+
+	// Let s = int(sig[32:64]); fail if s ≥ n.
+	s := signature.Z // int(sig[32:64])
+	if s.Cmp(b.curve.N) != -1 {
+		return false, fmt.Errorf("s >= N")
+	}
+
+	// Let e = int(hashBIP0340/challenge(bytes(r) || bytes(P) || m)) mod n.
+	eHash := b.H2(
+		b.EncodePoint(signature.R),
+		b.EncodePoint(P),
+		message)
+	e := new(big.Int).Mod(eHash, b.curve.N)
+
+	// Let R = s⋅G - e⋅P.
+	R := b.curve.EcSub(
+		b.curve.EcBaseMul(s),
+		b.curve.EcMul(P, e),
+	)
+
+	// Fail if is_infinite(R)
+	if !b.curve.IsOnCurve(R.X, R.Y) {
+		return false, fmt.Errorf("point R is infinite")
+	}
+
+	// Fail if not has_even_y(R).
+	if R.Y.Bit(0) != 0 {
+		return false, fmt.Errorf("coordinate R.y is not even")
+	}
+
+	// Fail if x(R) != r.
+	if R.X.Cmp(r) != 0 {
+		return false, fmt.Errorf("coordinate R.x != r")
+	}
+
+	// Return success if no failure occurred before reaching this point.
+	return true, nil
+}
+
+// liftX function implements lift_x(x) function as defined in [BIP-340].
+func (b *Bip340Ciphersuite) liftX(x *big.Int) (*Point, error) {
+	// From [BIP-340] specification section:
+	//
+	// The function lift_x(x), where x is a 256-bit unsigned integer, returns
+	// the point P for which x(P) = x[10] and has_even_y(P), or fails if x is
+	// greater than p-1 or no such point exists.
+
+	// Fail if x ≥ p.
+	p := b.curve.P
+	if x.Cmp(p) != -1 {
+		return nil, fmt.Errorf("value of x exceeds field size")
+	}
+
+	// Let c = x^3 + 7 mod p.
+	c := new(big.Int).Exp(x, big.NewInt(3), p)
+	c.Add(c, big.NewInt(7))
+	c.Mod(c, p)
+
+	// Let y = c^[(p+1)/4] mod p.
+	e := new(big.Int).Add(p, big.NewInt(1))
+	e.Div(e, big.NewInt(4))
+	y := new(big.Int).Exp(c, e, p)
+
+	// Fail if c ≠ y^2 mod p.
+	y2 := new(big.Int).Exp(y, big.NewInt(2), p)
+	if c.Cmp(y2) != 0 {
+		return nil, fmt.Errorf("no curve point matching x")
+	}
+
+	// Return the unique point P such that x(P) = x and y(P) = y if y mod 2 = 0
+	// or y(P) = p-y otherwise.
+	if y.Bit(0) != 0 {
+		y.Sub(p, y)
+	}
+	return &Point{x, y}, nil
 }
 
 // concat performs a concatenation of byte slices without the modification of
