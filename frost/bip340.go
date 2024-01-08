@@ -55,7 +55,7 @@ func (bc *Bip340Curve) EcAdd(a *Point, b *Point) *Point {
 
 // EcSub returns the subtraction of two elliptic curve points.
 func (bc *Bip340Curve) EcSub(a *Point, b *Point) *Point {
-	bNeg := &Point{b.X, new(big.Int).Neg(b.Y)}
+	bNeg := &Point{b.X, new(big.Int).Sub(bc.Params().P, b.Y)}
 	return bc.EcAdd(a, bNeg)
 }
 
