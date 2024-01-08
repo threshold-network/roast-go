@@ -258,10 +258,10 @@ func (b *Bip340Ciphersuite) VerifySignature(
 	// Not required by [BIP-340] but performed to ensure input data consistency.
 	// We do not want to return true if Y is an invalid coordinate.
 	if !b.curve.IsOnCurve(publicKey.X, publicKey.Y) {
-		return false, fmt.Errorf("point publicKey is infinite")
+		return false, fmt.Errorf("publicKey is infinite")
 	}
 	if publicKey.X.Cmp(b.curve.P) == 1 {
-		return false, fmt.Errorf("point publicKey exceeds field size")
+		return false, fmt.Errorf("publicKey exceeds field size")
 	}
 
 	// Let P = lift_x(int(pk)); fail if that fails.
@@ -298,17 +298,17 @@ func (b *Bip340Ciphersuite) VerifySignature(
 
 	// Fail if is_infinite(R)
 	if !b.curve.IsOnCurve(R.X, R.Y) {
-		return false, fmt.Errorf("point R is infinite")
+		return false, fmt.Errorf("R is infinite")
 	}
 
 	// Fail if not has_even_y(R).
 	if R.Y.Bit(0) != 0 {
-		return false, fmt.Errorf("coordinate R.y is not even")
+		return false, fmt.Errorf("R.y is not even")
 	}
 
 	// Fail if x(R) != r.
 	if R.X.Cmp(r) != 0 {
-		return false, fmt.Errorf("coordinate R.x != r")
+		return false, fmt.Errorf("R.x != r")
 	}
 
 	// Return success if no failure occurred before reaching this point.
