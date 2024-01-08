@@ -44,6 +44,19 @@ func TestBip340CurveEcAdd(t *testing.T) {
 	testutils.AssertStringsEqual(t, "Y coordinate", expectedY, result.Y.String())
 }
 
+func TestBip340CurveEcSub(t *testing.T) {
+	curve := NewBip340Ciphersuite().Curve()
+	point1 := curve.EcBaseMul(big.NewInt(30))
+	point2 := curve.EcBaseMul(big.NewInt(5))
+	result := curve.EcSub(point1, point2)
+
+	expectedX := "66165162229742397718677620062386824252848999675912518712054484685772795754260"
+	expectedY := "52018513869565587577673992057861898728543589604141463438466108080111932355586"
+
+	testutils.AssertStringsEqual(t, "X coordinate", expectedX, result.X.String())
+	testutils.AssertStringsEqual(t, "Y coordinate", expectedY, result.Y.String())
+}
+
 func TestBip340CurveEcAdd_Identity(t *testing.T) {
 	curve := NewBip340Ciphersuite().Curve()
 	point := curve.EcBaseMul(big.NewInt(10))
