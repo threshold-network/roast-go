@@ -10,6 +10,19 @@ type Coordinator struct {
 	Participant
 }
 
+// NewCoordinator creates a new [FROST] Coordinator instance.
+func NewCoordinator(
+	ciphersuite Ciphersuite,
+	publicKey *Point,
+) *Coordinator {
+	return &Coordinator{
+		Participant: Participant{
+			ciphersuite: ciphersuite,
+			publicKey:   publicKey,
+		},
+	}
+}
+
 // Aggregate implements Signature Share Aggregation from [FROST], section
 // 5.3. Signature Share Aggregation.
 //

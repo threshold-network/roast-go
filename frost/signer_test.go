@@ -1,7 +1,6 @@
 package frost
 
 import (
-	"crypto/rand"
 	"fmt"
 	"math/big"
 	"slices"
@@ -9,9 +8,6 @@ import (
 
 	"threshold.network/roast/internal/testutils"
 )
-
-var ciphersuite = NewBip340Ciphersuite()
-var groupSize = 100
 
 func TestRound2_ValidationError(t *testing.T) {
 	// just a basic test checking if Round2 calls validateGroupCommitments
@@ -146,41 +142,4 @@ func TestValidateGroupCommitments_Errors(t *testing.T) {
 			}
 		})
 	}
-}
-
-func createSigners(t *testing.T) []*Signer {
-	var signers []*Signer
-
-	// TODO: replace dummy secret key share with something real
-	buf := make([]byte, 32)
-	_, err := rand.Read(buf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	secretKeyShare := new(big.Int).SetBytes(buf)
-
-	for i := 1; i <= groupSize; i++ {
-		// TODO: pass real public key instead of nil
-		signer := NewSigner(ciphersuite, uint64(i), nil, secretKeyShare)
-		signers = append(signers, signer)
-	}
-
-	return signers
-}
-
-func executeRound1(t *testing.T, signers []*Signer) ([]*Nonce, []*NonceCommitment) {
-	var nonces []*Nonce
-	var commitments []*NonceCommitment
-
-	for _, signer := range signers {
-		n, c, err := signer.Round1()
-		if err != nil {
-			t.Fatal(t)
-		}
-
-		nonces = append(nonces, n)
-		commitments = append(commitments, c)
-	}
-
-	return nonces, commitments
 }
