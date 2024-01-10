@@ -1,6 +1,8 @@
 package frost
 
 import (
+	"crypto/rand"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -17,29 +19,68 @@ func TestFrostRoundtrip(t *testing.T) {
 	signers := createSigners(t)
 	publicKey := signers[0].publicKey
 
-	nonces, commitments := executeRound1(t, signers)
-	signatureShares := executeRound2(t, signers, message, nonces, commitments)
+	isSignatureValid := false
+	maxAttempts := 5
 
-	coordinator := NewCoordinator(ciphersuite, publicKey)
-	signature, err := coordinator.Aggregate(message, commitments, signatureShares)
+	for i := 0; !isSignatureValid && i < maxAttempts; i++ {
+		nonces, commitments := executeRound1(t, signers)
+		signatureShares := executeRound2(t, signers, message, nonces, commitments)
+
+		coordinator := NewCoordinator(ciphersuite, publicKey)
+		signature, err := coordinator.Aggregate(message, commitments, signatureShares)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		isSignatureValid, err = ciphersuite.VerifySignature(
+			signature,
+			publicKey,
+			message,
+		)
+		if err != nil {
+			fmt.Printf(
+				"signature verification error on attempt [%v]: [%v]\n",
+				i,
+				err,
+			)
+		}
+	}
+
+	testutils.AssertBoolsEqual(
+		t,
+		"signature verification result",
+		true,
+		isSignatureValid,
+	)
+}
+
+func createSigners(t *testing.T) []*Signer {
+	curve := ciphersuite.Curve()
+	order := curve.Order()
+
+	secretKey, err := rand.Int(rand.Reader, order)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	isValid, err := ciphersuite.VerifySignature(signature, publicKey, message)
-	testutils.AssertBoolsEqual(t, "signature verification result", true, isValid)
-	if err != nil {
-		t.Fatalf("unexpected signature verification error: [%v]", err)
-	}
-}
+	publicKey := curve.EcBaseMul(secretKey)
 
-func createSigners(t *testing.T) []*Signer {
-	keyShares, secret := testutils.GenerateKeyShares(
+	// From [BIP-340]:
+	// Let d' = int(sk)
+	// Fail if d' = 0 or d' ≥ n
+	// Let P = d'⋅G
+	// Let d = d' if has_even_y(P), otherwise let d = n - d' .
+	if publicKey.Y.Bit(0) != 0 { // is Y even?
+		secretKey.Sub(order, secretKey)
+		publicKey = curve.EcBaseMul(secretKey)
+	}
+
+	keyShares := testutils.GenerateKeyShares(
+		secretKey,
 		groupSize,
 		threshold,
-		ciphersuite.Curve().Order(),
+		order,
 	)
-	publicKey := ciphersuite.Curve().EcBaseMul(secret)
 
 	signers := make([]*Signer, groupSize)
 

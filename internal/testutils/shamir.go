@@ -8,15 +8,12 @@ import (
 // GenerateKeyShares generates a secret key and secret key shares for the group
 // of the given size with the required signing threshold.
 func GenerateKeyShares(
+	secretKey *big.Int,
 	groupSize int,
 	threshold int,
 	order *big.Int,
-) (
-	[]*big.Int,
-	*big.Int,
-) {
-	coefficients := generatePolynomial(threshold, order)
-	secretKey := coefficients[0]
+) []*big.Int {
+	coefficients := generatePolynomial(secretKey, threshold, order)
 
 	secretKeyShares := make([]*big.Int, groupSize)
 	for i := 0; i < groupSize; i++ {
@@ -28,17 +25,19 @@ func GenerateKeyShares(
 		)
 	}
 
-	return secretKeyShares, secretKey
+	return secretKeyShares
 }
 
 // generatePolynomial generates a polynomial of degree equal to `threshold` with
 // random coefficients, not higher than the group `order`.
 func generatePolynomial(
+	secretKey *big.Int,
 	threshold int,
 	order *big.Int,
 ) []*big.Int {
 	arr := make([]*big.Int, threshold)
-	for i := 0; i < threshold; i++ {
+	arr[0] = secretKey
+	for i := 1; i < threshold; i++ {
 		random, err := rand.Int(rand.Reader, order)
 		if err != nil {
 			panic(err)
