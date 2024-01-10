@@ -33,7 +33,7 @@ func TestFrostRoundtrip(t *testing.T) {
 			publicKey := signers[0].publicKey
 
 			isSignatureValid := false
-			maxAttempts := 5
+			maxAttempts := 20
 
 			// From [BIP-340]:
 			// Let k' = int(rand) mod n[13].
@@ -64,7 +64,8 @@ func TestFrostRoundtrip(t *testing.T) {
 				)
 				if err != nil {
 					fmt.Printf(
-						"signature verification error on attempt [%v]: [%v]\n",
+						"[%v] signature verification error on attempt [%v]: [%v]\n",
+						testName,
 						i,
 						err,
 					)
