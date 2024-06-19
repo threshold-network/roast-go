@@ -2,24 +2,28 @@ package frost
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 )
 
 // Coordinator represents a coordinator of the [FROST] signing protocol.
 type Coordinator struct {
 	Participant
+	threshold int
 }
 
 // NewCoordinator creates a new [FROST] Coordinator instance.
 func NewCoordinator(
 	ciphersuite Ciphersuite,
 	publicKey *Point,
+	threshold int,
 ) *Coordinator {
 	return &Coordinator{
 		Participant: Participant{
 			ciphersuite: ciphersuite,
 			publicKey:   publicKey,
 		},
+		threshold: threshold,
 	}
 }
 
@@ -64,7 +68,22 @@ func (c *Coordinator) Aggregate(
 	//    - (R, z), a Schnorr signature consisting of an Element R and
 	//      Scalar z.
 
-	// TODO: validate the number of signature shares
+	if len(signatureShares) < c.threshold {
+		return nil, fmt.Errorf(
+			"not enough shares; has [%d] for threshold [%d]",
+			len(signatureShares),
+			c.threshold,
+		)
+	}
+
+	if len(commitments) != len(signatureShares) {
+		return nil, fmt.Errorf(
+			"the number of commitments and signature shares do not match; "+
+				"has [%d] commitments and [%d] signature shares",
+			len(commitments),
+			len(signatureShares),
+		)
+	}
 
 	validationErrors, _ := c.validateGroupCommitmentsBase(commitments)
 	if len(validationErrors) != 0 {
