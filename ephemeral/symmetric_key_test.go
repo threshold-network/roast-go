@@ -1,9 +1,10 @@
 package ephemeral
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
+
+	"threshold.network/roast/internal/testutils"
 )
 
 func TestEncryptDecrypt(t *testing.T) {
@@ -25,13 +26,12 @@ func TestEncryptDecrypt(t *testing.T) {
 	}
 
 	decryptedString := string(decrypted)
-	if decryptedString != msg {
-		t.Fatalf(
-			"unexpected message\nexpected: %v\nactual: %v",
-			msg,
-			decryptedString,
-		)
-	}
+	testutils.AssertStringsEqual(
+		t,
+		"unexpected message",
+		msg,
+		decryptedString,
+	)
 }
 
 func TestCiphertextRandomized(t *testing.T) {
@@ -76,14 +76,12 @@ func TestGracefullyHandleBrokenCipher(t *testing.T) {
 
 	_, err = symmetricKey.Decrypt(brokenCipher)
 
-	expectedError := fmt.Errorf("symmetric key decryption failed")
-	if !reflect.DeepEqual(expectedError, err) {
-		t.Fatalf(
-			"unexpected error\nexpected: %v\nactual:   %v",
-			expectedError,
-			err,
-		)
-	}
+	testutils.AssertStringsEqual(
+		t,
+		"decryption error",
+		"symmetric key decryption failed",
+		err.Error(),
+	)
 }
 
 func newEcdhSymmetricKey() (*SymmetricEcdhKey, error) {

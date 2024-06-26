@@ -1,6 +1,10 @@
 package ephemeral
 
-import "testing"
+import (
+	"testing"
+
+	"threshold.network/roast/internal/testutils"
+)
 
 func TestFullEcdh(t *testing.T) {
 	//
@@ -48,11 +52,10 @@ func TestFullEcdh(t *testing.T) {
 	}
 
 	decryptedString := string(decrypted)
-	if decryptedString != msg {
-		t.Fatalf(
-			"unexpected message\nexpected: %v\nactual: %v",
-			msg,
-			decryptedString,
-		)
-	}
+	testutils.AssertStringsEqual(
+		t,
+		"decrypted message",
+		msg,
+		decryptedString,
+	)
 }
