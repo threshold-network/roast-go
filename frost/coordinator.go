@@ -10,6 +10,7 @@ import (
 type Coordinator struct {
 	Participant
 	threshold int
+	groupSize int
 }
 
 // NewCoordinator creates a new [FROST] Coordinator instance.
@@ -17,6 +18,7 @@ func NewCoordinator(
 	ciphersuite Ciphersuite,
 	publicKey *Point,
 	threshold int,
+	groupSize int,
 ) *Coordinator {
 	return &Coordinator{
 		Participant: Participant{
@@ -24,6 +26,7 @@ func NewCoordinator(
 			publicKey:   publicKey,
 		},
 		threshold: threshold,
+		groupSize: groupSize,
 	}
 }
 
@@ -68,11 +71,21 @@ func (c *Coordinator) Aggregate(
 	//    - (R, z), a Schnorr signature consisting of an Element R and
 	//      Scalar z.
 
+	// MIN_PARTICIPANTS <= NUM_PARTICIPANTS
 	if len(signatureShares) < c.threshold {
 		return nil, fmt.Errorf(
 			"not enough shares; has [%d] for threshold [%d]",
 			len(signatureShares),
 			c.threshold,
+		)
+	}
+
+	// NUM_PARTICIPANTS <= MAX_PARTICIPANTS
+	if len(signatureShares) > c.groupSize {
+		return nil, fmt.Errorf(
+			"too many shares; has [%d] for group size [%d]",
+			len(signatureShares),
+			c.groupSize,
 		)
 	}
 

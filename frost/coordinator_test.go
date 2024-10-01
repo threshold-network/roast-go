@@ -1,6 +1,7 @@
 package frost
 
 import (
+	"math/big"
 	"testing"
 
 	"threshold.network/roast/internal/testutils"
@@ -17,22 +18,27 @@ func TestAggregate_Failures(t *testing.T) {
 	nonces, commitments := executeRound1(t, signers)
 	signatureShares := executeRound2(t, signers, message, nonces, commitments)
 
-	coordinator := NewCoordinator(ciphersuite, publicKey, threshold)
+	coordinator := NewCoordinator(ciphersuite, publicKey, threshold, groupSize)
 
 	tests := map[string]struct {
-		numberOfCommitments     int
-		numberOfSignatureShares int
-		expectedErr             string
+		commitments     []*NonceCommitment
+		signatureShares []*big.Int
+		expectedErr     string
 	}{
 		"number of commitments and signature shares do not match": {
-			numberOfCommitments:     groupSize,
-			numberOfSignatureShares: groupSize - 1,
-			expectedErr:             "the number of commitments and signature shares do not match; has [100] commitments and [99] signature shares",
+			commitments:     commitments[:groupSize],
+			signatureShares: signatureShares[:groupSize-1],
+			expectedErr:     "the number of commitments and signature shares do not match; has [100] commitments and [99] signature shares",
 		},
 		"number of commitments and signature shares below threshold": {
-			numberOfCommitments:     threshold - 1,
-			numberOfSignatureShares: threshold - 1,
-			expectedErr:             "not enough shares; has [50] for threshold [51]",
+			commitments:     commitments[:threshold-1],
+			signatureShares: signatureShares[:threshold-1],
+			expectedErr:     "not enough shares; has [50] for threshold [51]",
+		},
+		"number of commitments and signatures above group size": {
+			commitments:     append(commitments, commitments[0]),
+			signatureShares: append(signatureShares, signatureShares[0]),
+			expectedErr:     "too many shares; has [101] for group size [100]",
 		},
 	}
 
@@ -40,8 +46,8 @@ func TestAggregate_Failures(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			signature, err := coordinator.Aggregate(
 				message,
-				commitments[:test.numberOfCommitments],
-				signatureShares[:test.numberOfSignatureShares],
+				test.commitments,
+				test.signatureShares,
 			)
 
 			testutils.AssertStringsEqual(
