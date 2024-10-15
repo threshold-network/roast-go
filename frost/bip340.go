@@ -1,3 +1,6 @@
+// Copyright 2010 The Go Authors. All rights reserved.
+// Copyright 2017 The go-ethereum Authors
+
 package frost
 
 import (
@@ -5,7 +8,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/btcsuite/btcd/btcec"
 )
 
 // Bip340Ciphersuite is [BIP-340] implementation of [FROST] ciphersuite.
@@ -19,7 +22,7 @@ type Bip340Ciphersuite struct {
 // ready to be used for the [FROST] protocol execution.
 func NewBip340Ciphersuite() *Bip340Ciphersuite {
 	return &Bip340Ciphersuite{
-		curve: &Bip340Curve{secp256k1.S256()},
+		curve: &Bip340Curve{btcec.S256()},
 	}
 }
 
@@ -29,7 +32,7 @@ func (b *Bip340Ciphersuite) Curve() Curve {
 }
 
 type Bip340Curve struct {
-	*secp256k1.BitCurve
+	*btcec.KoblitzCurve
 }
 
 // EcBaseMul returns k*G, where G is the base point of the group.
@@ -80,17 +83,13 @@ func (bc *Bip340Curve) IsPointOnCurve(p *Point) bool {
 
 // SerializedPointLength returns the byte length of a serialized curve point.
 func (b *Bip340Curve) SerializedPointLength() int {
-	// From the Marshal() function of secp256k1 go-ethereum implementation:
-	// 	 byteLen := (BitCurve.BitSize + 7) >> 3
-	//   ret := make([]byte, 1+2*byteLen)
-	return 65
+	byteLen := (b.BitSize + 7) >> 3
+	return 1 + 2*byteLen
 }
 
 // SerializePoint serializes the provided elliptic curve point to bytes.
 // The slice length is equal to SerializedPointLength().
 func (b *Bip340Curve) SerializePoint(p *Point) []byte {
-	// Note that secp256k1 implementation uses a fixed length of
-	// (BitCurve.BitSize + 7) >> 3
 	return b.Marshal(p.X, p.Y)
 }
 
@@ -111,6 +110,57 @@ func (b *Bip340Curve) DeserializePoint(bytes []byte) *Point {
 	}
 
 	return point
+}
+
+// Marshal and Unmarshal as well as readBits were copied from
+// ethereum/go-ethereum. The logic in Marshal and Unmarshal originates from the
+// Go crypto/elliptic package.
+
+const (
+	// number of bits in a big.Word
+	wordBits = 32 << (uint64(^big.Word(0)) >> 63)
+	// number of bytes in a big.Word
+	wordBytes = wordBits / 8
+)
+
+// readBits encodes the absolute value of bigint as big-endian bytes. Callers
+// must ensure that buf has enough space. If buf is too short the result will
+// be incomplete.
+func readBits(bigint *big.Int, buf []byte) {
+	i := len(buf)
+	for _, d := range bigint.Bits() {
+		for j := 0; j < wordBytes && i > 0; j++ {
+			i--
+			buf[i] = byte(d)
+			d >>= 8
+		}
+	}
+}
+
+// Marshal converts a point into the form specified in section 4.3.6 of ANSI
+// X9.62.
+func (b *Bip340Curve) Marshal(x, y *big.Int) []byte {
+	byteLen := (b.BitSize + 7) >> 3
+	ret := make([]byte, 1+2*byteLen)
+	ret[0] = 4 // uncompressed point flag
+	readBits(x, ret[1:1+byteLen])
+	readBits(y, ret[1+byteLen:])
+	return ret
+}
+
+// Unmarshal converts a point, serialised by Marshal, into an x, y pair. On
+// error, x = nil.
+func (b *Bip340Curve) Unmarshal(data []byte) (x, y *big.Int) {
+	byteLen := (b.BitSize + 7) >> 3
+	if len(data) != 1+2*byteLen {
+		return
+	}
+	if data[0] != 4 { // uncompressed form
+		return
+	}
+	x = new(big.Int).SetBytes(data[1 : 1+byteLen])
+	y = new(big.Int).SetBytes(data[1+byteLen:])
+	return
 }
 
 // H1 is the implementation of H1(m) function from [FROST].
