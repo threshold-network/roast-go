@@ -51,7 +51,7 @@ func TestFrostRoundtrip(t *testing.T) {
 				nonces, commitments := executeRound1(t, signers)
 				signatureShares := executeRound2(t, signers, message, nonces, commitments)
 
-				coordinator := NewCoordinator(ciphersuite, publicKey)
+				coordinator := NewCoordinator(ciphersuite, publicKey, threshold, groupSize)
 				signature, err := coordinator.Aggregate(message, commitments, signatureShares)
 				if err != nil {
 					t.Fatal(err)
