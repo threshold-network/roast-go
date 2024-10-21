@@ -29,12 +29,12 @@ import (
 // accused party. The key is publicly revealed by the accuser.
 type evidenceLog struct {
 	// senderIndex -> *ephemeralPublicKeyMessage
-	pubKeyMessageLog *messageStorage
+	pubKeyMessageLog *messageStorage[*ephemeralPublicKeyMessage]
 }
 
 func newEvidenceLog() *evidenceLog {
 	return &evidenceLog{
-		pubKeyMessageLog: newMessageStorage(),
+		pubKeyMessageLog: newMessageStorage[*ephemeralPublicKeyMessage](),
 	}
 }
 
@@ -56,40 +56,28 @@ func (e *evidenceLog) putEphemeralPublicKeyMessage(
 func (e *evidenceLog) getEphemeralPublicKeyMessage(
 	sender memberIndex,
 ) *ephemeralPublicKeyMessage {
-	storedMessage := e.pubKeyMessageLog.getMessage(sender)
-	switch message := storedMessage.(type) {
-	case *ephemeralPublicKeyMessage:
-		return message
-	}
-	return nil
+	return e.pubKeyMessageLog.getMessage(sender)
 }
 
-type messageStorage struct {
-	cache     map[memberIndex]interface{}
-	cacheLock sync.Mutex
+type messageStorage[T interface{}] struct {
+	cache     map[memberIndex]T
+	cacheLock sync.RWMutex
 }
 
-func newMessageStorage() *messageStorage {
-	return &messageStorage{
-		cache: make(map[memberIndex]interface{}),
+func newMessageStorage[T interface{}]() *messageStorage[T] {
+	return &messageStorage[T]{
+		cache: make(map[memberIndex]T),
 	}
 }
 
-func (ms *messageStorage) getMessage(sender memberIndex) interface{} {
-	ms.cacheLock.Lock()
-	defer ms.cacheLock.Unlock()
+func (ms *messageStorage[T]) getMessage(sender memberIndex) T {
+	ms.cacheLock.RLock()
+	defer ms.cacheLock.RUnlock()
 
-	message, ok := ms.cache[sender]
-	if !ok {
-		return nil
-	}
-
-	return message
+	return ms.cache[sender]
 }
 
-func (ms *messageStorage) putMessage(
-	sender memberIndex, message interface{},
-) error {
+func (ms *messageStorage[T]) putMessage(sender memberIndex, message T) error {
 	ms.cacheLock.Lock()
 	defer ms.cacheLock.Unlock()
 
