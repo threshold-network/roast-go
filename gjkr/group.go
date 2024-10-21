@@ -1,5 +1,7 @@
 package gjkr
 
+import "slices"
+
 // group represents the current state of information about the GJKR key
 // generation group. Each GJKR protocol participant should have the same group
 // state at the end of each protocol step.
@@ -58,21 +60,9 @@ func (g *group) isInGroup(memberIndex memberIndex) bool {
 }
 
 func (g *group) isInactive(memberIndex memberIndex) bool {
-	for _, inactiveMemberIndex := range g.inactiveMemberIndexes {
-		if memberIndex == inactiveMemberIndex {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(g.inactiveMemberIndexes, memberIndex)
 }
 
 func (g *group) isDisqualified(memberIndex memberIndex) bool {
-	for _, disqualifiedMemberIndex := range g.disqualifiedMemberIndexes {
-		if memberIndex == disqualifiedMemberIndex {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(g.disqualifiedMemberIndexes, memberIndex)
 }
