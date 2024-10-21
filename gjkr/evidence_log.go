@@ -27,43 +27,36 @@ import (
 // sent by the accused party. To do this, they read the round 3 message from the
 // log, and decrypt it using the symmetric key used between the accuser and
 // accused party. The key is publicly revealed by the accuser.
-type evidenceLog interface {
-	// getEphemeralPublicKeyMessage returns the `ephemeralPublicKeyMessage`
-	// broadcast in the first protocol round by the given sender.
-	getEphemeralPublicKeyMessage(sender memberIndex) *ephemeralPublicKeyMessage
-
-	// putEphemeralMessage is a function that takes a single
-	// EphemeralPubKeyMessage, and stores that as evidence for future
-	// accusation trials for a given (sender, receiver) pair. If a message
-	// already exists for the given sender, we return an error to the user.
-	putEphemeralPublicKeyMessage(pubKeyMessage *ephemeralPublicKeyMessage) error
-}
-
-// dkgEvidenceLog is the default implementation of an evidenceLog.
-type dkgEvidenceLog struct {
+type evidenceLog struct {
 	// senderIndex -> *ephemeralPublicKeyMessage
 	pubKeyMessageLog *messageStorage
 }
 
-func newDkgEvidenceLog() *dkgEvidenceLog {
-	return &dkgEvidenceLog{
+func newEvidenceLog() *evidenceLog {
+	return &evidenceLog{
 		pubKeyMessageLog: newMessageStorage(),
 	}
 }
 
-func (d *dkgEvidenceLog) putEphemeralPublicKeyMessage(
+// putEphemeralMessage is a function that takes a single
+// EphemeralPubKeyMessage, and stores that as evidence for future
+// accusation trials for a given (sender, receiver) pair. If a message
+// already exists for the given sender, we return an error to the user.
+func (e *evidenceLog) putEphemeralPublicKeyMessage(
 	pubKeyMessage *ephemeralPublicKeyMessage,
 ) error {
-	return d.pubKeyMessageLog.putMessage(
+	return e.pubKeyMessageLog.putMessage(
 		pubKeyMessage.senderIndex,
 		pubKeyMessage,
 	)
 }
 
-func (d *dkgEvidenceLog) getEphemeralPublicKeyMessage(
+// getEphemeralPublicKeyMessage returns the `ephemeralPublicKeyMessage`
+// broadcast in the first protocol round by the given sender.
+func (e *evidenceLog) getEphemeralPublicKeyMessage(
 	sender memberIndex,
 ) *ephemeralPublicKeyMessage {
-	storedMessage := d.pubKeyMessageLog.getMessage(sender)
+	storedMessage := e.pubKeyMessageLog.getMessage(sender)
 	switch message := storedMessage.(type) {
 	case *ephemeralPublicKeyMessage:
 		return message

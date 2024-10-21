@@ -8,8 +8,8 @@ import (
 )
 
 func TestPutEphemeralPublicKeyMessageTwice(t *testing.T) {
-	dkgEvidenceLog := newDkgEvidenceLog()
-	err := dkgEvidenceLog.putEphemeralPublicKeyMessage(
+	evidenceLog := newEvidenceLog()
+	err := evidenceLog.putEphemeralPublicKeyMessage(
 		&ephemeralPublicKeyMessage{
 			senderIndex: memberIndex(1),
 		})
@@ -17,7 +17,7 @@ func TestPutEphemeralPublicKeyMessageTwice(t *testing.T) {
 		t.Fatalf("unexpected error: [%v]", err)
 	}
 
-	err = dkgEvidenceLog.putEphemeralPublicKeyMessage(
+	err = evidenceLog.putEphemeralPublicKeyMessage(
 		&ephemeralPublicKeyMessage{
 			senderIndex: memberIndex(1),
 		})
@@ -34,23 +34,23 @@ func TestPutEphemeralPublicKeyMessageTwice(t *testing.T) {
 }
 
 func TestPutGetEphemeralPublicKeyMessage(t *testing.T) {
-	dkgEvidenceLog := newDkgEvidenceLog()
+	evidenceLog := newEvidenceLog()
 
 	message := &ephemeralPublicKeyMessage{
 		senderIndex: memberIndex(1),
 	}
 
-	m := dkgEvidenceLog.getEphemeralPublicKeyMessage(memberIndex(1))
+	m := evidenceLog.getEphemeralPublicKeyMessage(memberIndex(1))
 	if m != nil {
 		t.Fatalf("expected message not to be found but has [%v]", m)
 	}
 
-	err := dkgEvidenceLog.putEphemeralPublicKeyMessage(message)
+	err := evidenceLog.putEphemeralPublicKeyMessage(message)
 	if err != nil {
 		t.Fatalf("unexpected error: [%v]", err)
 	}
 
-	m = dkgEvidenceLog.getEphemeralPublicKeyMessage(memberIndex(1))
+	m = evidenceLog.getEphemeralPublicKeyMessage(memberIndex(1))
 	if !reflect.DeepEqual(message, m) {
 		t.Fatalf(
 			"unexpected message\nexpected: %v\nactual:   %v",
