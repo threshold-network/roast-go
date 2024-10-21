@@ -2,6 +2,9 @@ package gjkr
 
 import "threshold.network/roast/ephemeral"
 
+// memberIndex represents a unique index of a member of GJKR protocol.
+// The values start from 1. For a group size of N, the memberIndex is
+// 1 <= memberIndex <= N.
 type memberIndex uint16
 
 // member includes the core pieces of GJKR protocol member important for every
