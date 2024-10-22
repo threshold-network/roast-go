@@ -52,7 +52,7 @@ func (m *ephemeralKeyPairGeneratingMember) generateEphemeralKeyPair() (
 func (m *symmetricKeyGeneratingMember) generateSymmetricKeys(
 	ephemeralPubKeyMessages []*ephemeralPublicKeyMessage,
 ) error {
-	for _, ephemeralPubKeyMessage := range deduplicateBySender(
+	for _, ephemeralPubKeyMessage := range m.preProcessMessages(
 		ephemeralPubKeyMessages,
 	) {
 		otherMember := ephemeralPubKeyMessage.senderIndex
@@ -133,23 +133,4 @@ func (m *symmetricKeyGeneratingMember) isValidEphemeralPublicKeyMessage(
 	}
 
 	return true
-}
-
-// deduplicateBySender removes duplicated items for the given sender.
-// It always takes the first item that occurs for the given sender
-// and ignores the subsequent ones.
-func deduplicateBySender[T interface{ senderIdx() memberIndex }](
-	list []T,
-) []T {
-	senders := make(map[memberIndex]bool)
-	result := make([]T, 0)
-
-	for _, item := range list {
-		if _, exists := senders[item.senderIdx()]; !exists {
-			senders[item.senderIdx()] = true
-			result = append(result, item)
-		}
-	}
-
-	return result
 }

@@ -5,6 +5,7 @@ go 1.22.2
 require (
 	github.com/btcsuite/btcd v0.20.1-beta
 	golang.org/x/crypto v0.14.0
+	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 )
 
 require (

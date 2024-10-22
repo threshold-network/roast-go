@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
+
+	"golang.org/x/exp/slices"
 )
 
 // AssertBigIntNonZero checks if the provided not-nil big integer is non-zero.
@@ -115,4 +117,20 @@ func testBytesEqual(expectedBytes []byte, actualBytes []byte) error {
 	}
 
 	return nil
+}
+
+func AssertUint16SlicesEqual[T ~uint16](
+	t *testing.T,
+	description string,
+	expected []T,
+	actual []T,
+) {
+	if !slices.Equal(expected, actual) {
+		t.Errorf(
+			"unexpected %s\nexpected: %v\nactual:   %v\n",
+			description,
+			expected,
+			actual,
+		)
+	}
 }
