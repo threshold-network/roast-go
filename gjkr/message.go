@@ -17,10 +17,15 @@ import "threshold.network/roast/ephemeral"
 // within the group.
 type ephemeralPublicKeyMessage struct {
 	senderIndex memberIndex // i
+	sessionID   string
 
 	ephemeralPublicKeys map[memberIndex]*ephemeral.PublicKey // j -> Y_ij
 }
 
-func (m *ephemeralPublicKeyMessage) senderIdx() memberIndex {
+func (m *ephemeralPublicKeyMessage) getSenderIndex() memberIndex {
 	return m.senderIndex
+}
+
+func (m *ephemeralPublicKeyMessage) getSessionID() string {
+	return m.sessionID
 }

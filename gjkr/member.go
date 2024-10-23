@@ -11,8 +11,8 @@ type memberIndex uint16
 // phase of the protocol.
 type member struct {
 	memberIndex memberIndex
+	sessionID   string
 	group       *group
-
 	evidenceLog evidenceLog
 
 	logger Logger

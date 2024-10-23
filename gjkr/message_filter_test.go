@@ -6,6 +6,24 @@ import (
 	"threshold.network/roast/internal/testutils"
 )
 
+func TestFilterForSession(t *testing.T) {
+	msg0 := &ephemeralPublicKeyMessage{sessionID: "session-2", senderIndex: 1}
+	msg1 := &ephemeralPublicKeyMessage{sessionID: "session-1", senderIndex: 1}
+	msg2 := &ephemeralPublicKeyMessage{sessionID: "session-1", senderIndex: 2}
+	msg3 := &ephemeralPublicKeyMessage{sessionID: "session-2", senderIndex: 3}
+
+	filtered := filterForSession("session-1", []*ephemeralPublicKeyMessage{
+		msg0, msg1, msg2, msg3,
+	})
+
+	testutils.AssertDeepEqual(
+		t,
+		"filtered messages",
+		[]*ephemeralPublicKeyMessage{msg1, msg2},
+		filtered,
+	)
+}
+
 func TestFindInactive(t *testing.T) {
 	var tests = map[string]struct {
 		groupSize  uint16
@@ -80,7 +98,7 @@ func TestDeduplicateBySender(t *testing.T) {
 
 			deduplicatedSenders := make([]memberIndex, 0)
 			for _, msg := range deduplicateBySender(messages) {
-				deduplicatedSenders = append(deduplicatedSenders, msg.senderIdx())
+				deduplicatedSenders = append(deduplicatedSenders, msg.getSenderIndex())
 			}
 			testutils.AssertUint16SlicesEqual(
 				t,

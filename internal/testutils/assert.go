@@ -3,6 +3,7 @@ package testutils
 import (
 	"fmt"
 	"math/big"
+	"reflect"
 	"testing"
 
 	"golang.org/x/exp/slices"
@@ -126,6 +127,22 @@ func AssertUint16SlicesEqual[T ~uint16](
 	actual []T,
 ) {
 	if !slices.Equal(expected, actual) {
+		t.Errorf(
+			"unexpected %s\nexpected: %v\nactual:   %v\n",
+			description,
+			expected,
+			actual,
+		)
+	}
+}
+
+func AssertDeepEqual(
+	t *testing.T,
+	description string,
+	expected any,
+	actual any,
+) {
+	if !reflect.DeepEqual(expected, actual) {
 		t.Errorf(
 			"unexpected %s\nexpected: %v\nactual:   %v\n",
 			description,
